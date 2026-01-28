@@ -1,0 +1,304 @@
+{
+	"info": {
+		"name": "AdminStaff",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Create Staff",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{adminToken}}" },
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/staff",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "staff"]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"staff1@example.com\",\n  \"password\": \"StaffPass123!\",\n  \"status\": \"publish\",\n  \"permissions\": {\n    \"interest\": { \"read\": true, \"write\": false, \"update\": false },\n    \"language\": { \"read\": true, \"write\": false, \"update\": false },\n    \"religion\": { \"read\": true, \"write\": true, \"update\": false },\n    \"page\": { \"read\": true, \"write\": true, \"update\": false }\n  }\n}"
+				}
+			}
+		},
+		{
+			"name": "Operate Balance - Wallet Credit (Male)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{adminToken}}" },
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/users/operate-balance",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "users", "operate-balance"]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"userType\": \"male\",\n  \"userId\": \"{{maleUserId}}\",\n  \"operationType\": \"wallet\",\n  \"action\": \"credit\",\n  \"amount\": 100,\n  \"message\": \"Wallet Balance Added!!\"\n}"
+				}
+			}
+		},
+		{
+			"name": "Operate Balance - Wallet Debit (Male)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{adminToken}}" },
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/users/operate-balance",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "users", "operate-balance"]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"userType\": \"male\",\n  \"userId\": \"{{maleUserId}}\",\n  \"operationType\": \"wallet\",\n  \"action\": \"debit\",\n  \"amount\": 20,\n  \"message\": \"Wallet Balance Substract!!\"\n}"
+				}
+			}
+		},
+		{
+			"name": "Operate Balance - Coin Credit (Female)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{adminToken}}" },
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/users/operate-balance",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "users", "operate-balance"]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"userType\": \"female\",\n  \"userId\": \"{{femaleUserId}}\",\n  \"operationType\": \"coin\",\n  \"action\": \"credit\",\n  \"amount\": 50,\n  \"message\": \"Coins Added!!\"\n}"
+				}
+			}
+		},
+		{
+			"name": "List Transactions (Male Wallet)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/users/male/{{maleUserId}}/transactions?operationType=wallet",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "users", "male", "{{maleUserId}}", "transactions"],
+					"query": [
+						{ "key": "operationType", "value": "wallet" }
+					]
+				}
+			}
+		},
+		{
+			"name": "List Transactions (Female Coin with date range)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/users/female/{{femaleUserId}}/transactions?operationType=coin&startDate={{startDate}}&endDate={{endDate}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "users", "female", "{{femaleUserId}}", "transactions"],
+					"query": [
+						{ "key": "operationType", "value": "coin" },
+						{ "key": "startDate", "value": "{{startDate}}" },
+						{ "key": "endDate", "value": "{{endDate}}" }
+					]
+				}
+			}
+		},
+		{
+			"name": "Update Staff (PATCH)",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{adminToken}}" },
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/staff/{{staffId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "staff", "{{staffId}}"]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"staff1-updated@example.com\",\n  \"status\": \"unpublish\",\n  \"permissions\": {\n    \"interest\": { \"read\": true, \"write\": true, \"update\": true }\n  }\n}"
+				}
+			}
+		},
+		{
+			"name": "List All Staff",
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/staff",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "staff"]
+				}
+			}
+		},
+		{
+			"name": "Admin Login",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/login",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "login"]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"AdminPass123!\",\n  \"userType\": \"admin\"\n}"
+				}
+			}
+		},
+		{
+			"name": "Staff Login",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/login",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "login"]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"staff1@example.com\",\n  \"password\": \"StaffPass123!\",\n  \"userType\": \"staff\"\n}"
+				}
+			}
+		},
+		{
+			"name": "Staff - Get Interests (Read Permission)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{staffToken}}" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/interests",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "interests"]
+				}
+			}
+		},
+		{
+			"name": "Staff - Create Interest (No Write Permission - Should Fail)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{staffToken}}" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/interests",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "interests"]
+				},
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{ "key": "title", "value": "Test Interest" },
+						{ "key": "status", "value": "active" }
+					]
+				}
+			}
+		},
+		{
+			"name": "Staff - Get Religions (Read Permission)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{staffToken}}" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/religions",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "religions"]
+				}
+			}
+		},
+		{
+			"name": "Staff - Create Religion (Write Permission)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{staffToken}}" },
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/religions",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "religions"]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"Test Religion\"\n}"
+				}
+			}
+		},
+		{
+			"name": "Staff - Get Pages (Read Permission)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{staffToken}}" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/pages",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "pages"]
+				}
+			}
+		},
+		{
+			"name": "Staff - Create Page (Write Permission)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{staffToken}}" },
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/pages",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "pages"]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"title\": \"Test Page\",\n  \"content\": \"Test content\"\n}"
+				}
+			}
+		},
+		{
+			"name": "Delete Staff",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+				],
+				"url": {
+					"raw": "{{baseUrl}}/admin/staff/{{staffId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["admin", "staff", "{{staffId}}"]
+				}
+			}
+		}
+	]
+}

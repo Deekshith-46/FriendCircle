@@ -1,0 +1,79 @@
+{
+	"info": {
+		"name": "Agency",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Register",
+			"request": {
+				"method": "POST",
+				"url": {
+					"raw": "{{baseUrl}}/agency/register",
+					"host": ["{{baseUrl}}"],
+					"path": ["agency", "register"]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"test@example.com\",\n  \"mobileNumber\": \"9999999999\"\n}"
+				},
+				"header": [{"key":"Content-Type","value":"application/json"}]
+			}
+		},
+		{
+			"name": "Verify Registration OTP",
+			"request": {
+				"method": "POST",
+				"url": {"raw": "{{baseUrl}}/agency/verify-otp","host":["{{baseUrl}}"],"path":["agency","verify-otp"]},
+				"body": {"mode":"raw","raw":"{\n  \"otp\": 1234\n}"},
+				"header": [{"key":"Content-Type","value":"application/json"}]
+			}
+		},
+		{
+			"name": "Login (send OTP)",
+			"request": {
+				"method": "POST",
+				"url": {"raw": "{{baseUrl}}/agency/login","host":["{{baseUrl}}"],"path":["agency","login"]},
+				"body": {"mode":"raw","raw":"{\n  \"email\": \"test@example.com\"\n}"},
+				"header": [{"key":"Content-Type","value":"application/json"}]
+			}
+		},
+		{
+			"name": "Verify Login OTP",
+			"request": {
+				"method": "POST",
+				"url": {"raw": "{{baseUrl}}/agency/verify-login-otp","host":["{{baseUrl}}"],"path":["agency","verify-login-otp"]},
+				"body": {"mode":"raw","raw":"{\n  \"otp\": 1234\n}"},
+				"header": [{"key":"Content-Type","value":"application/json"}]
+			}
+		},
+		{
+			"name": "Save Details",
+			"request": {
+				"method": "PUT",
+				"url": {"raw": "{{baseUrl}}/agency/details","host":["{{baseUrl}}"],"path":["agency","details"]},
+				"header": [ {"key":"Authorization","value":"Bearer {{token}}"}, {"key":"Content-Type","value":"application/json"} ],
+				"body": {"mode":"raw","raw":"{\n  \"firstName\": \"Alice\",\n  \"lastName\": \"Agency\",\n  \"aadharNumber\": \"1234-5678-9012\",\n  \"panNumber\": \"ABCDE1234F\",\n  \"referralCode\": \"REF123\"\n}"}
+			}
+		},
+		{
+			"name": "Upload Image",
+			"request": {
+				"method": "POST",
+				"url": {"raw": "{{baseUrl}}/agency/upload-image","host":["{{baseUrl}}"],"path":["agency","upload-image"]},
+				"header": [ {"key":"Authorization","value":"Bearer {{token}}"} ],
+				"body": {"mode":"formdata","formdata":[{"key":"image","type":"file","src":["/path/to/image.jpg"]}]}
+			}
+		},
+		{
+			"name": "Me",
+			"request": {
+				"method": "GET",
+				"url": {"raw": "{{baseUrl}}/agency/me","host":["{{baseUrl}}"],"path":["agency","me"]},
+				"header": [ {"key":"Authorization","value":"Bearer {{token}}"} ]
+			}
+		}
+	]
+}
+
+

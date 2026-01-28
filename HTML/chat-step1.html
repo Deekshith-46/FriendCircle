@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Realtime Chat Pro</title>
+
+<!-- SOCKET -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<!-- FIREBASE -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+
+<style>
+:root{
+ --primary:#0b5cff;
+ --sent:#dcf8c6;
+ --recv:#ffffff;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI;background:#eaeef3}
+.app{display:flex;height:100vh}
+
+/* SIDEBAR */
+.sidebar{width:340px;background:#fff;border-right:1px solid #ddd;display:flex;flex-direction:column}
+.sidebar-header{padding:16px;background:linear-gradient(45deg,#0b5cff,#4f46e5);color:#fff;font-size:20px;font-weight:700}
+.sidebar-controls{padding:10px;border-bottom:1px solid #eee}
+.sidebar-controls input{width:100%;padding:10px;margin-bottom:8px;border-radius:6px;border:1px solid #ccc}
+.chat-list{flex:1;overflow-y:auto}
+.chat-item{display:flex;align-items:center;padding:12px;cursor:pointer;border-bottom:1px solid #eee}
+.chat-item:hover{background:#f5f7ff}
+.chat-avatar{width:48px;height:48px;border-radius:50%;margin-right:10px}
+.chat-info{flex:1}
+.chat-name{font-weight:600}
+.chat-last{font-size:13px;color:#666}
+.unread{background:#22c55e;color:#fff;font-size:12px;padding:3px 8px;border-radius:12px}
+
+/* CHAT */
+.chat-panel{flex:1;display:flex;flex-direction:column;background:#efeae2}
+.chat-header{padding:12px;background:#fff;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:10px}
+.chat-header img{width:40px;height:40px;border-radius:50%}
+.chat-box{flex:1;padding:16px;overflow-y:auto}
+.msg{max-width:65%;padding:10px 14px;border-radius:18px;margin-bottom:6px;font-size:14px}
+.sent{background:var(--sent);margin-left:auto}
+.recv{background:#fff}
+.msg img,.msg video{max-width:260px;border-radius:10px;cursor:pointer}
+.msg audio{width:220px}
+.time{font-size:11px;color:#555;text-align:right;margin-top:3px}
+
+/* INPUT */
+.chat-input{display:flex;gap:8px;padding:10px;background:#fff}
+.chat-input input{flex:1;padding:12px;border-radius:20px;border:1px solid #ccc}
+.chat-input button{border:none;background:var(--primary);color:#fff;padding:10px 14px;border-radius:50%}
+
+/* MODAL */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center}
+.modal img,.modal video{max-width:90%;max-height:90%}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-header">Chats</div>
+  <div class="sidebar-controls">
+    <input id="api" value="http://localhost:5001">
+    <input id="token" placeholder="JWT Token">
+    <button onclick="init()">Load</button>
+  </div>
+  <div id="rooms" class="chat-list"></div>
+</div>
+
+<!-- CHAT -->
+<div class="chat-panel" id="panel">
+  <div style="margin:auto;color:#777">Select a chat</div>
+</div>
+
+</div>
+
+<div class="modal" id="viewer" onclick="this.style.display='none'">
+  <div id="viewerContent"></div>
+</div>
+
+<script>
+let socket,currentUser,currentRoom;
+let activeRoomId=null;
+let recorder,audioChunks=[];
+
+/* ---------- AUTH ---------- */
+function decode(){
+ const p=JSON.parse(atob(token.value.split('.')[1]));
+ currentUser={id:p.id,type:p.type};
+}
+
+function init(){
+ decode();
+
+ socket = io(api.value);
+ socket.emit("authenticate", token.value);
+
+ socket.on("authenticated",()=>{
+   loadRooms();
+   initFCM();
+ });
+
+ socket.on("newMessage",onNewMessage);
+ socket.on("messageRead",updateTicks);
+ socket.on("typing",onTyping);
+}
+
+/* ---------- ROOMS ---------- */
+async function loadRooms(){
+ const res=await fetch(api.value+"/chat/rooms",{
+   headers:{Authorization:"Bearer "+token.value}
+ });
+ const json=await res.json();
+ rooms.innerHTML="";
+
+ (json.data||[]).forEach(r=>{
+  const other=r.participants.find(p=>p.userType!==currentUser.type);
+  if(!other) return;
+
+  // Check if user is online (this would need to come from the backend in a real implementation)
+  const isOnline = checkIfUserIsOnline(other.userId._id, other.userType);
+  const statusIndicator = isOnline ? '<span style="color:#22c55e">●</span>' : '<span style="color:#9ca3af">●</span>';
+
+  const div=document.createElement("div");
+  div.className="chat-item";
+  div.onclick=()=>openRoom(r);
+  // Store user ID in data attribute for easier access
+  div.setAttribute('data-user-id', other.userId._id);
+  div.innerHTML=`
+   <div style="position:relative">
+     <img class="chat-avatar" src="${other.userId.image}">
+     <div style="position:absolute;bottom:0;right:0;font-size:12px;">${statusIndicator}</div>
+   </div>
+   <div class="chat-info">
+     <div class="chat-name">${other.userId.name} <span style="font-size:10px;color:${isOnline ? '#22c55e' : '#9ca3af'}">${isOnline ? 'Online' : 'Offline'}</span></div>
+     <div class="chat-last">${r.lastMessage||""}</div>
+   </div>
+   ${r.unreadCount>0?`<div class="unread">${r.unreadCount}</div>`:""}
+  `;
+  rooms.appendChild(div);
+ });
+}
+
+// Global object to track user online statuses
+window.onlineUsers = window.onlineUsers || {};
+
+// Helper function to check if user is online
+function checkIfUserIsOnline(userId, userType) {
+  // Check against our in-memory online users map
+  return window.onlineUsers[userId] === true;
+}
+
+// Function to update a user's online status
+function updateUserStatus(userId, userType, isOnline) {
+  window.onlineUsers[userId] = isOnline;
+  // Update UI directly instead of reloading rooms
+  updateOnlineStatusInUI(userId, isOnline);
+}
+
+// Function to update online status in UI directly
+function updateOnlineStatusInUI(userId, isOnline) {
+  // Update the sidebar
+  const chatItems = document.querySelectorAll('.chat-item[data-user-id="' + userId + '"]');
+  chatItems.forEach(item => {
+    const statusIndicators = item.querySelectorAll('span');
+    statusIndicators.forEach(span => {
+      if (span.innerHTML.includes('●')) {
+        span.style.color = isOnline ? '#22c55e' : '#9ca3af';
+        span.innerHTML = isOnline ? '● Online' : '● Offline';
+      }
+    });
+    
+    // Update the name indicators
+    const nameSpans = item.querySelectorAll('.chat-name span');
+    nameSpans.forEach(span => {
+      if (span.style && (span.innerHTML.includes('Online') || span.innerHTML.includes('Offline'))) {
+        span.style.color = isOnline ? '#22c55e' : '#9ca3af';
+        span.innerHTML = isOnline ? 'Online' : 'Offline';
+      }
+    });
+  });
+  
+  // Update the chat header if this is the active chat
+  if (currentRoom && currentRoom.participants.some(p => p.userId._id.toString() === userId.toString())) {
+    const statusText = isOnline ? 
+      `<span style="font-size:12px; color:#22c55e;">● Online</span>` : 
+      `<span style="font-size:12px; color:#9ca3af;">● Offline</span>`;
+    
+    const otherUser = currentRoom.participants.find(p => p.userId._id.toString() === userId.toString());
+    if (otherUser) {
+      document.getElementById('chatTitle').innerHTML = `${otherUser.userId.name} ${statusText}`;
+    }
+  }
+}
+
+/* ---------- OPEN ROOM ---------- */
+async function openRoom(r){
+ currentRoom=r;
+ activeRoomId=r._id;
+
+ socket.emit("joinRoom",r._id);
+
+ panel.innerHTML=`
+ <div class="chat-header">
+  <img src="${r.participants.find(p=>p.userType!==currentUser.type).userId.image}">
+  <b id="chatTitle">${r.participants.find(p=>p.userType!==currentUser.type).userId.name}</b>
+ </div>
+ <div class="chat-box" id="box"></div>
+ <div class="chat-input">
+  <button onclick="fileInput.click()">📎</button>
+  <button onclick="recordVoice()">🎤</button>
+  <input type="file" id="fileInput" hidden onchange="uploadMedia(this)">
+  <input id="msg" placeholder="Type..." oninput="emitTyping()" onkeydown="if(event.key==='Enter')send()">
+  <button onclick="send()">➤</button>
+ </div>`;
+ loadMessages();
+}
+
+/* ---------- MESSAGES ---------- */
+async function loadMessages(){
+ const res=await fetch(`${api.value}/chat/${currentRoom._id}/messages`,{
+   headers:{Authorization:"Bearer "+token.value}
+ });
+ const json=await res.json();
+ box.innerHTML="";
+ (json.data||[]).forEach(render);
+}
+
+function render(m){
+ const div=document.createElement("div");
+ const mine=m.senderType===currentUser.type;
+ div.className="msg "+(mine?"sent":"recv");
+ 
+ // Store message data for tick updates
+ div.dataset.message = JSON.stringify(m);
+ div.dataset.messageId = m._id;
+
+ div.oncontextmenu=e=>{
+   e.preventDefault();
+   showDeleteMenu(m);
+ };
+
+ // Determine tick status based on readBy property
+ const ticks=getTickStatus(m);
+
+ div.innerHTML=`
+  ${m.type==="text"?m.content:
+    m.type==="image"?`<img src="${m.content}" onclick="view('<img src=\\'${m.content}\\'>')">`:
+    m.type==="video"?`<video src="${m.content}" controls></video>`:
+    `<audio src="${m.content}" controls></audio>`
+  }
+  <div class="time">${new Date(m.createdAt).toLocaleTimeString()} ${ticks}</div>
+ `;
+ box.appendChild(div);
+ box.scrollTop=box.scrollHeight;
+}
+
+/* ---------- SEND ---------- */
+function send(){
+ if(!msg.value)return;
+ socket.emit("sendMessage",{
+   roomId:currentRoom._id,
+   type:"text",
+   content:msg.value
+ });
+ msg.value="";
+}
+
+/* ---------- TYPING ---------- */
+function emitTyping(){
+ socket.emit("typing",{roomId:currentRoom._id});
+}
+function onTyping(d){
+ if(d.roomId===currentRoom?._id){
+  chatTitle.innerText="typing...";
+  setTimeout(()=>{
+    chatTitle.innerText=currentRoom.participants.find(p=>p.userType!==currentUser.type).userId.name;
+  },1000);
+ }
+}
+
+/* ---------- NEW MESSAGE ---------- */
+function onNewMessage(m){
+ if(m.chatRoomId!==activeRoomId){
+   showBrowserNotification(m);
+   loadRooms();
+   return;
+ }
+ render(m);
+ socket.emit("markAsRead",{roomId:currentRoom._id,messageIds:[m._id]});
+}
+
+/* ---------- TICKS ---------- */
+// Track delivery and read status for proper tick system
+let messageDeliveryStatus = {};
+
+function getTickStatus(message) {
+  // Check if message is sent by current user
+  const isMine = message.senderType === currentUser.type;
+  
+  if (!isMine) {
+    // For received messages, no ticks needed
+    return "";
+  }
+  
+  // For sent messages, determine tick status based on delivery/read status
+  // WhatsApp-style: ✓ (single grey) = sent to server, ✓✓ (double grey) = delivered to socket, ✓✓ (double blue) = read
+  
+  // Check if message has been read by the other user
+  const isReadByOther = message.readBy && message.readBy.some(readEntry => 
+    readEntry.userId.toString() !== currentUser.id.toString()
+  );
+  
+  if (isReadByOther) {
+    // Message has been read by the other user - double blue ticks
+    return "<span style='color:#1e88e5'>✓✓</span>";
+  } else {
+    // Check if message has been delivered to the other user's socket
+    const isDeliveredToOther = message.deliveredTo && message.deliveredTo.some(deliveryEntry => 
+      deliveryEntry.userId.toString() !== currentUser.id.toString()
+    );
+    
+    if (isDeliveredToOther) {
+      // Message delivered to other user's socket but not read yet - double grey ticks
+      return "<span style='color:#999'>✓✓</span>";
+    } else {
+      // Message sent to server but not yet delivered to other user - single grey tick
+      return "<span style='color:#999'>✓</span>";
+    }
+  }
+}
+
+// Function to update message delivery status
+function updateMessageDeliveryStatus(messageId, status) {
+  // Status: 'sent', 'delivered', 'read'
+  messageDeliveryStatus[messageId] = status;
+  
+  // Update the UI for this specific message
+  const messageElements = document.querySelectorAll(`[data-message-id="${messageId}"]`);
+  messageElements.forEach(element => {
+    const timeElement = element.querySelector('.time');
+    if (timeElement) {
+      // Parse the message data
+      const messageData = JSON.parse(element.dataset.message);
+      const newTicks = getTickStatus(messageData);
+      // Extract the time part from the element
+      const timeMatch = timeElement.innerHTML.match(/^(.*?)<span/);
+      const timePart = timeMatch ? timeMatch[1] : new Date(messageData.createdAt).toLocaleTimeString();
+      timeElement.innerHTML = timePart.trim() + ' ' + newTicks;
+    }
+  });
+}
+
+// Simplified updateTicks that re-renders all messages in the room
+function updateTicks(p) {
+  if(p.roomId!==currentRoom?._id) return;
+  
+  // Reload messages to update tick statuses
+  loadMessages();
+}
+
+/* ---------- USER STATUS ---------- */
+function onUserStatusChanged(statusData) {
+  // Update our in-memory tracking
+  updateUserStatus(statusData.userId, statusData.userType, statusData.isOnline);
+}
+
+
+
+/* ---------- NOTIFICATION ---------- */
+function showBrowserNotification(m){
+ if(Notification.permission==="granted"){
+  new Notification("New message",{
+    body:m.type==="text"?m.content:"📎 Media message"
+  });
+ }
+}
+
+/* ---------- UPLOAD ---------- */
+async function uploadMedia(input){
+ const file = input.files[0];
+ if (!file) return;
+ 
+ // Show temporary message while upload is in progress
+ const tempMessageId = 'temp_' + Date.now();
+ const tempMessage = {
+   _id: tempMessageId,
+   senderType: currentUser.type,
+   type: getFileType(file),
+   content: URL.createObjectURL(file), // Local preview URL
+   createdAt: new Date(),
+   isUploading: true,
+   readBy: []
+ };
+ 
+ // Create and render temporary message element
+ const div = document.createElement("div");
+ const mine = tempMessage.senderType === currentUser.type;
+ div.className = "msg " + (mine ? "sent" : "recv");
+ 
+ // Store message data for tick updates
+ div.dataset.message = JSON.stringify(tempMessage);
+ div.dataset.messageId = tempMessage._id;
+
+ div.oncontextmenu = e => {
+   e.preventDefault();
+   showDeleteMenu(tempMessage);
+ };
+
+ // Show uploading indicator
+ const ticks = '<span style="color:#999">⏳</span>';
+
+ div.innerHTML = `
+  ${tempMessage.type === "text" ? tempMessage.content :
+    tempMessage.type === "image" ? `<img src="${tempMessage.content}" onclick="view('<img src=\\'${tempMessage.content}\\'>')">` :
+    tempMessage.type === "video" ? `<video src="${tempMessage.content}" controls></video>` :
+    `<audio src="${tempMessage.content}" controls></audio>`
+  }
+  <div class="time">${new Date(tempMessage.createdAt).toLocaleTimeString()} ${ticks}</div>
+ `;
+ 
+ box.appendChild(div);
+ box.scrollTop = box.scrollHeight;
+ 
+ try {
+   const fd = new FormData();
+   fd.append("file", file);
+   const res = await fetch(api.value + "/chat/upload", {
+     method: "POST",
+     headers: { Authorization: "Bearer " + token.value },
+     body: fd
+   });
+   
+   const json = await res.json();
+   
+   if (json.success) {
+     // Remove temporary message
+     div.remove();
+     
+     // Send actual message via socket
+     socket.emit("sendMessage", {
+       roomId: currentRoom._id,
+       type: json.data.type,
+       content: json.data.url
+     });
+   } else {
+     // Show error if upload failed
+     alert('Upload failed: ' + (json.message || 'Unknown error'));
+     div.remove();
+   }
+ } catch (error) {
+   console.error('Upload error:', error);
+   alert('Upload failed: ' + error.message);
+   div.remove();
+ }
+}
+
+// Helper to determine file type
+function getFileType(file) {
+  const type = file.type.split('/')[0];
+  if (type === 'image') return 'image';
+  if (type === 'video') return 'video';
+  if (type === 'audio') return 'audio';
+  return 'file';
+}
+
+/* ---------- DELETE ---------- */
+function showDeleteMenu(m){
+ const isMyMessage = m.senderType === currentUser.type;
+ let choice;
+ 
+ if(isMyMessage) {
+   // For own messages, offer both options
+   choice = confirm("Delete Options:\nOK = Delete for me only\nCancel = Delete for everyone");
+   
+   if(choice) {
+     deleteForMe(m._id);
+   } else {
+     deleteForEveryone(m._id);
+   }
+ } else {
+   // For others' messages, only delete for me
+   if(confirm("Delete this message for me only?")) {
+     deleteForMe(m._id);
+   }
+ }
+}
+
+async function deleteForMe(id){
+ try {
+   const res = await fetch(`${api.value}/chat/message/${id}`, {
+     method: "DELETE",
+     headers: { Authorization: "Bearer " + token.value }
+   });
+   
+   if(res.ok) {
+     loadMessages(); // Reload messages to reflect changes
+   } else {
+     alert('Failed to delete message');
+   }
+ } catch (error) {
+   console.error('Delete for me error:', error);
+   alert('Error deleting message');
+ }
+}
+
+async function deleteForEveryone(id){
+ try {
+   const res = await fetch(`${api.value}/chat/message/${id}/delete-for-everyone`, {
+     method: "DELETE",
+     headers: { Authorization: "Bearer " + token.value }
+   });
+   
+   if(res.ok) {
+     loadMessages(); // Reload messages to reflect changes
+   } else {
+     alert('Failed to delete message for everyone');
+   }
+ } catch (error) {
+   console.error('Delete for everyone error:', error);
+   alert('Error deleting message for everyone');
+ }
+}
+
+/* ---------- VOICE ---------- */
+async function recordVoice(){
+ const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+ recorder=new MediaRecorder(stream);
+ recorder.start();
+ recorder.ondataavailable=e=>audioChunks.push(e.data);
+ recorder.onstop=async()=>{
+  const blob=new Blob(audioChunks,{type:"audio/webm"});
+  audioChunks=[];
+  
+  // Show temporary message while upload is in progress
+  const tempMessageId = 'temp_' + Date.now();
+  const tempMessage = {
+    _id: tempMessageId,
+    senderType: currentUser.type,
+    type: 'audio',
+    content: URL.createObjectURL(blob), // Local preview URL
+    createdAt: new Date(),
+    isUploading: true,
+    readBy: []
+  };
+  
+  // Create and render temporary message element
+  const div = document.createElement("div");
+  const mine = tempMessage.senderType === currentUser.type;
+  div.className = "msg " + (mine ? "sent" : "recv");
+  
+  // Store message data for tick updates
+  div.dataset.message = JSON.stringify(tempMessage);
+  div.dataset.messageId = tempMessage._id;
+
+  div.oncontextmenu = e => {
+    e.preventDefault();
+    showDeleteMenu(tempMessage);
+  };
+
+  // Show uploading indicator
+  const ticks = '<span style="color:#999">⏳ Recording...</span>';
+
+  div.innerHTML = `
+   ${tempMessage.type === "text" ? tempMessage.content :
+     tempMessage.type === "image" ? `<img src="${tempMessage.content}" onclick="view('<img src=\\'${tempMessage.content}\\'>')">` :
+     tempMessage.type === "video" ? `<video src="${tempMessage.content}" controls></video>` :
+     `<audio src="${tempMessage.content}" controls></audio>`
+   }
+   <div class="time">${new Date(tempMessage.createdAt).toLocaleTimeString()} ${ticks}</div>
+  `;
+  
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  
+  try {
+    const fd=new FormData();
+    fd.append("file",blob);
+    const res=await fetch(api.value+"/chat/upload",{
+      method:"POST",
+      headers:{Authorization:"Bearer "+token.value},
+      body:fd
+    });
+    
+    const json=await res.json();
+    
+    if(json.success) {
+      // Remove temporary message
+      div.remove();
+      
+      socket.emit("sendMessage",{
+        roomId:currentRoom._id,
+        type:"audio",
+        content:json.data.url
+      });
+    } else {
+      // Show error if upload failed
+      alert('Upload failed: ' + (json.message || 'Unknown error'));
+      div.remove();
+    }
+  } catch (error) {
+    console.error('Upload error:', error);
+    alert('Upload failed: ' + error.message);
+    div.remove();
+  }
+ };
+ setTimeout(()=>recorder.stop(),5000);
+}
+
+/* ---------- VIEW MEDIA ---------- */
+function view(html){
+ viewerContent.innerHTML=html;
+ viewer.style.display="flex";
+}
+
+/* ---------- FCM ---------- */
+function initFCM(){
+ firebase.initializeApp({
+  apiKey:"AIzaSyATP24MQ3PITrpoBsBoEJvC_efQf99romo",
+  authDomain:"friendcircle-notifications.firebaseapp.com",
+  projectId:"friendcircle-notifications",
+  messagingSenderId:"336749988199",
+  appId:"1:336749988199:web:4cb9b0d9ff27d63c9987c2"
+ });
+ const msg=firebase.messaging();
+ Notification.requestPermission().then(async p=>{
+  if(p==="granted"){
+   const t=await msg.getToken({
+     vapidKey:"BIYvvagGTdBsoQuh7ujnR4YNRl57ScQcutv66AHPb5ZsHHhQiwXM7P5oCVja3qriIggIniKsgbZpN_U6fhHj2zs"
+   });
+   await fetch(api.value+"/notification/save-token",{
+    method:"POST",
+    headers:{
+      Authorization:"Bearer "+token.value,
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({fcmToken:t,platform:"web"})
+   });
+  }
+ });
+}
+</script>
+</body>
+</html>

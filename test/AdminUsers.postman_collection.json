@@ -1,0 +1,35 @@
+{
+	"info": {"name": "AdminUsers", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+	"item": [
+		{
+			"name": "List All Users (Combined)",
+			"request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{adminOrStaffToken}}"}],"url":{"raw":"{{baseUrl}}/admin/users","host":["{{baseUrl}}"],"path":["admin","users"]}}
+		},
+		{
+			"name": "List Male Users",
+			"request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{adminOrStaffToken}}"}],"url":{"raw":"{{baseUrl}}/admin/users?type=male","host":["{{baseUrl}}"],"path":["admin","users"],"query":[{"key":"type","value":"male"}]}}
+		},
+		{
+			"name": "List Female Users",
+			"request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{adminOrStaffToken}}"}],"url":{"raw":"{{baseUrl}}/admin/users?type=female","host":["{{baseUrl}}"],"path":["admin","users"],"query":[{"key":"type","value":"female"}]}}
+		},
+		{
+			"name": "Deactivate Male User",
+			"request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{adminOrStaffToken}}"}],"url":{"raw":"{{baseUrl}}/admin/users/toggle-status","host":["{{baseUrl}}"],"path":["admin","users","toggle-status"]},"body":{"mode":"formdata","formdata":[{"key":"userType","value":"male"},{"key":"userId","value":"{{maleUserId}}"},{"key":"status","value":"inactive"}]}}
+		},
+		{
+			"name": "Activate Male User",
+			"request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{adminOrStaffToken}}"}],"url":{"raw":"{{baseUrl}}/admin/users/toggle-status","host":["{{baseUrl}}"],"path":["admin","users","toggle-status"]},"body":{"mode":"formdata","formdata":[{"key":"userType","value":"male"},{"key":"userId","value":"{{maleUserId}}"},{"key":"status","value":"active"}]}}
+		},
+		{
+			"name": "Deactivate Female User",
+			"request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{adminOrStaffToken}}"}],"url":{"raw":"{{baseUrl}}/admin/users/toggle-status","host":["{{baseUrl}}"],"path":["admin","users","toggle-status"]},"body":{"mode":"formdata","formdata":[{"key":"userType","value":"female"},{"key":"userId","value":"{{femaleUserId}}"},{"key":"status","value":"inactive"}]}}
+		},
+		{
+			"name": "Activate Female User",
+			"request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{adminOrStaffToken}}"}],"url":{"raw":"{{baseUrl}}/admin/users/toggle-status","host":["{{baseUrl}}"],"path":["admin","users","toggle-status"]},"body":{"mode":"formdata","formdata":[{"key":"userType","value":"female"},{"key":"userId","value":"{{femaleUserId}}"},{"key":"status","value":"active"}]}}
+		}
+	]
+}
+
+

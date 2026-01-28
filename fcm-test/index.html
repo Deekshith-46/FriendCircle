@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Realtime Chat Pro</title>
+
+<!-- SOCKET -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<!-- FIREBASE -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+
+<style>
+:root{
+ --primary:#0b5cff;
+ --bg:#0f172a;
+ --panel:#ffffff;
+ --sent:#dcf8c6;
+ --recv:#ffffff;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI;background:#eaeef3}
+.app{display:flex;height:100vh}
+
+/* SIDEBAR */
+.sidebar{width:340px;background:#fff;border-right:1px solid #ddd;display:flex;flex-direction:column}
+.sidebar-header{padding:16px;background:linear-gradient(45deg,#0b5cff,#4f46e5);color:#fff;font-size:20px;font-weight:700}
+.sidebar-controls{padding:10px;border-bottom:1px solid #eee}
+.sidebar-controls input{width:100%;padding:10px;margin-bottom:8px;border-radius:6px;border:1px solid #ccc}
+.chat-list{flex:1;overflow-y:auto}
+.chat-item{display:flex;align-items:center;padding:12px;cursor:pointer;border-bottom:1px solid #eee}
+.chat-item:hover{background:#f5f7ff}
+.chat-avatar{width:48px;height:48px;border-radius:50%;margin-right:10px}
+.chat-info{flex:1}
+.chat-name{font-weight:600}
+.chat-last{font-size:13px;color:#666}
+.unread{background:#22c55e;color:#fff;font-size:12px;padding:3px 8px;border-radius:12px}
+
+/* CHAT */
+.chat-panel{flex:1;display:flex;flex-direction:column;background:#efeae2}
+.chat-header{padding:12px;background:#fff;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:10px}
+.chat-header img{width:40px;height:40px;border-radius:50%}
+.chat-box{flex:1;padding:16px;overflow-y:auto}
+.msg{max-width:65%;padding:10px 14px;border-radius:18px;margin-bottom:6px;font-size:14px;position:relative}
+.sent{background:var(--sent);margin-left:auto}
+.recv{background:#fff}
+.msg img,.msg video{max-width:260px;border-radius:10px;cursor:pointer}
+.msg audio{width:220px}
+.time{font-size:11px;color:#555;text-align:right;margin-top:3px}
+
+/* INPUT */
+.chat-input{display:flex;gap:8px;padding:10px;background:#fff}
+.chat-input input{flex:1;padding:12px;border-radius:20px;border:1px solid #ccc}
+.chat-input button{border:none;background:var(--primary);color:#fff;padding:10px 14px;border-radius:50%}
+
+/* MODAL */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center}
+.modal img,.modal video{max-width:90%;max-height:90%}
+</style>
+</head>
+
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">Chats</div>
+    <div class="sidebar-controls">
+      <input id="api" value="http://localhost:5001">
+      <input id="token" placeholder="JWT Token">
+      <button onclick="init()">Load</button>
+    </div>
+    <div id="rooms" class="chat-list"></div>
+  </div>
+
+  <!-- CHAT -->
+  <div class="chat-panel" id="panel">
+    <div style="margin:auto;color:#777">Select a chat</div>
+  </div>
+</div>
+
+<!-- MEDIA VIEWER -->
+<div class="modal" id="viewer" onclick="this.style.display='none'">
+  <div id="viewerContent"></div>
+</div>
+
+<script>
+let socket,currentUser,currentRoom;
+
+function decode(){
+ const p=JSON.parse(atob(token.value.split('.')[1]));
+ currentUser={id:p.id,type:p.type};
+}
+
+async function init(){
+ try {
+   decode();
+
+   if (!token.value) {
+     alert("Please paste JWT token");
+     return;
+   }
+
+   socket = io(api.value);
+   socket.emit("authenticate", token.value);
+
+   socket.on("authenticated", () => {
+     console.log("Socket authenticated");
+     loadRooms();
+     initFCM(); // 🔥 moved here
+   });
+
+   socket.on("authentication_error", () => {
+     alert("Invalid token. Socket auth failed.");
+   });
+
+   socket.on("newMessage", onNewMessage);
+   socket.on("messageRead", updateTicks);
+
+ } catch (e) {
+   alert("Invalid JWT format");
+ }
+}
+
+async function loadRooms(){
+ const res = await fetch(api.value+"/chat/rooms",{
+   headers:{ Authorization:"Bearer "+token.value }
+ });
+
+ if (!res.ok) {
+   alert("Unauthorized! Please check JWT token.");
+   return;
+ }
+
+ const json = await res.json();
+ const data = json.data || [];
+
+ rooms.innerHTML = "";
+
+ data.forEach(r=>{
+   const other = r.participants.find(p=>p.userType!==currentUser.type);
+   if (!other) return;
+
+   const div=document.createElement("div");
+   div.className="chat-item";
+   div.onclick=()=>openRoom(r);
+   div.innerHTML=`
+     <img class="chat-avatar" src="${other.userId.image||''}">
+     <div class="chat-info">
+       <div class="chat-name">${other.userId.name}</div>
+       <div class="chat-last">${r.lastMessage||""}</div>
+     </div>
+     ${r.unreadCount>0?`<div class="unread">${r.unreadCount}</div>`:""}
+   `;
+   rooms.appendChild(div);
+ });
+}
+
+async function openRoom(r){
+ currentRoom=r;
+ socket.emit("joinRoom",r._id);
+ panel.innerHTML=`
+ <div class="chat-header">
+  <img src="${r.participants.find(p=>p.userType!==currentUser.type).userId.image}">
+  <b>${r.participants.find(p=>p.userType!==currentUser.type).userId.name}</b>
+ </div>
+ <div class="chat-box" id="box"></div>
+ <div class="chat-input">
+  <input id="msg" placeholder="Type..." onkeydown="if(event.key==='Enter')send()">
+  <button onclick="send()">➤</button>
+ </div>`;
+ loadMessages();
+}
+
+async function loadMessages(){
+ const res=await fetch(`${api.value}/chat/${currentRoom._id}/messages`,
+ {headers:{Authorization:"Bearer "+token.value}});
+ const {data}=await res.json();
+ box.innerHTML="";
+ const unread=[];
+ data.forEach(m=>{
+  render(m);
+  if(m.senderId!==currentUser.id) unread.push(m._id);
+ });
+ if(unread.length){
+  await fetch(api.value+"/chat/mark-as-read",{
+   method:"POST",
+   headers:{Authorization:"Bearer "+token.value,"Content-Type":"application/json"},
+   body:JSON.stringify({roomId:currentRoom._id,messageIds:unread})
+  });
+  loadRooms();
+ }
+}
+
+function render(m){
+ const div=document.createElement("div");
+ const isMine = m.senderType===currentUser.type;
+ div.className="msg "+(isMine?"sent":"recv");
+
+ let content =
+  m.type==="text" ? m.content :
+  m.type==="image" ? `<img src="${m.content}" onclick="view('<img src=\\'${m.content}\\'>')">` :
+  m.type==="video" ? `<video src="${m.content}" controls onclick="view('<video src=\\'${m.content}\\' controls>')"></video>` :
+  `<audio src="${m.content}" controls></audio>`;
+
+ let ticks = "";
+ if (isMine) {
+   // Default ✓✓ grey (sent & delivered)
+   ticks = `<span style="color:#999">✓✓</span>`;
+ }
+
+ div.innerHTML=`
+  ${content}
+  <div class="time">
+    ${new Date(m.createdAt).toLocaleTimeString()}
+    ${ticks}
+  </div>
+ `;
+ box.appendChild(div);
+ box.scrollTop=box.scrollHeight;
+}
+
+
+function send(){
+ if(!msg.value)return;
+ socket.emit("sendMessage",{roomId:currentRoom._id,type:"text",content:msg.value});
+ msg.value="";
+}
+
+function onNewMessage(m){
+ if(m.chatRoomId===currentRoom?._id){
+  render(m);
+  socket.emit("markAsRead",{roomId:currentRoom._id,messageIds:[m._id]});
+ }else loadRooms();
+}
+
+function view(html){
+ viewerContent.innerHTML=html;
+ viewer.style.display="flex";
+}
+
+function updateTicks(payload) {
+  /**
+   payload = {
+     roomId,
+     messageIds: [],
+     readerId,
+     readerType,
+     timestamp
+   }
+  */
+
+  // Only update if this room is open
+  if (!currentRoom || payload.roomId !== currentRoom._id) return;
+
+  // Loop through all message bubbles
+  document.querySelectorAll(".msg.sent").forEach(msgEl => {
+    const timeEl = msgEl.querySelector(".time");
+    if (!timeEl) return;
+
+    // Replace grey ticks with blue ticks
+    timeEl.innerHTML = timeEl.innerHTML.replace(
+      "✓✓",
+      "<span style='color:#1e88e5'>✓✓</span>"
+    );
+  });
+}
+
+
+/* PUSH NOTIFICATIONS */
+function initFCM(){
+ const firebaseConfig={
+  apiKey:"AIzaSyATP24MQ3PITrpoBsBoEJvC_efQf99romo",
+  authDomain:"friendcircle-notifications.firebaseapp.com",
+  projectId:"friendcircle-notifications",
+  messagingSenderId:"336749988199",
+  appId:"1:336749988199:web:4cb9b0d9ff27d63c9987c2"
+ };
+ firebase.initializeApp(firebaseConfig);
+ const msg=firebase.messaging();
+ Notification.requestPermission().then(async p=>{
+  if(p==="granted"){
+   const t=await msg.getToken({vapidKey:"BIYvvagGTdBsoQuh7ujnR4YNRl57ScQcutv66AHPb5ZsHHhQiwXM7P5oCVja3qriIggIniKsgbZpN_U6fhHj2zs"});
+   await fetch(api.value+"/notification/save-token",{
+    method:"POST",
+    headers:{Authorization:"Bearer "+token.value,"Content-Type":"application/json"},
+    body:JSON.stringify({fcmToken:t,platform:"web"})
+   });
+  }
+ });
+}
+</script>
+</body>
+</html>
