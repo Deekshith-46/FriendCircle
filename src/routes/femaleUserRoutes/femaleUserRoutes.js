@@ -77,6 +77,9 @@ router.use('/me/balance', require('./balanceRoutes'));
 // Get withdrawal history
 router.get('/me/withdrawals', auth, requireReviewAccepted, femaleUserController.getWithdrawalHistory);
 
+// Get total coins and converted rupees
+router.get('/me/coins-and-rupees', auth, requireReviewAccepted, femaleUserController.getBalanceInfo);
+
 // Get my transactions (female) with optional filters
 router.get('/me/transactions', auth, requireReviewAccepted, async (req, res) => {
   try {

@@ -53,6 +53,7 @@ const { requireReviewAccepted } = require('../../middlewares/reviewStatusMiddlew
 router.post('/my-earnings', auth, requireReviewAccepted, myEarningsController.getMyEarnings);
 router.get('/total-coins', auth, requireReviewAccepted, myEarningsController.getTotalCoins);
 router.post('/my-withdrawals', auth, requireReviewAccepted, myWithdrawalsController.getMyWithdrawals);
+router.get('/me/coins-and-rupees', auth, requireReviewAccepted, myWithdrawalsController.getTotalCoinsAndRupees);
 
 module.exports = router;
 

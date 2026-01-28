@@ -390,8 +390,10 @@ exports.getMyBalance = async (req, res) => {
       walletCoins = 0;
     }
     
-    // Calculate rupee values
-    const walletRupees = Number((walletCoins / coinRate).toFixed(2));
+    // Calculate rupee values - if 5 coins = 1 rupee, then divide by coinRate
+    // But if coinRate represents coins per rupee, we need to divide
+    const conversionRate = coinRate ? (1 / coinRate) : 0.2; // Default to 0.2 (5 coins = 1 rupee)
+    const walletRupees = Number((walletCoins * conversionRate).toFixed(2));
     
     return res.json({
       success: true,
@@ -401,7 +403,8 @@ exports.getMyBalance = async (req, res) => {
           rupees: walletRupees
         },
         conversionRate: {
-          coinsPerRupee: coinRate
+          coinsPerRupee: coinRate,
+          rupeesPerCoin: conversionRate
         }
       }
     });

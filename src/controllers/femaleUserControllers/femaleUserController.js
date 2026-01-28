@@ -1292,8 +1292,11 @@ exports.getBalanceInfo = async (req, res) => {
     const walletBalance = user.walletBalance || 0;
     const coinBalance = user.coinBalance || 0;
     
-    const walletBalanceInRupees = Number((walletBalance / coinToRupeeRate).toFixed(2));
-    const coinBalanceInRupees = Number((coinBalance / coinToRupeeRate).toFixed(2));
+    // If 5 coins = 1 rupee, then conversion rate is 1/5 = 0.2
+    const conversionRate = coinToRupeeRate ? (1 / coinToRupeeRate) : 0.2;
+    
+    const walletBalanceInRupees = Number((walletBalance * conversionRate).toFixed(2));
+    const coinBalanceInRupees = Number((coinBalance * conversionRate).toFixed(2));
     
     return res.json({
       success: true,
@@ -1302,12 +1305,9 @@ exports.getBalanceInfo = async (req, res) => {
           coins: walletBalance,
           rupees: walletBalanceInRupees
         },
-        coinBalance: {
-          coins: coinBalance,
-          rupees: coinBalanceInRupees
-        },
         conversionRate: {
-          coinsPerRupee: coinToRupeeRate
+          coinsPerRupee: coinToRupeeRate,
+          rupeesPerCoin: conversionRate
         }
       }
     });
