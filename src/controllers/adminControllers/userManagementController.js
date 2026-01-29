@@ -180,14 +180,21 @@ exports.listUsers = async (req, res) => {
 // Toggle status active/inactive
 exports.toggleStatus = async (req, res) => {
 	try {
-		const { userType, userId, status } = req.body; // userType: 'male' | 'female'; status: 'active' | 'inactive'
-		if (!['male', 'female'].includes(userType)) {
+		const { userType, userId, status } = req.body; // userType: 'male' | 'female' | 'agency'; status: 'active' | 'inactive'
+		if (!['male', 'female', 'agency'].includes(userType)) {
 			return res.status(400).json({ success: false, message: messages.USER_MANAGEMENT.INVALID_USER_TYPE });
 		}
 		if (!['active', 'inactive'].includes(status)) {
 			return res.status(400).json({ success: false, message: messages.USER_MANAGEMENT.INVALID_STATUS });
 		}
-		const Model = userType === 'male' ? MaleUser : FemaleUser;
+		let Model;
+		if (userType === 'male') {
+			Model = MaleUser;
+		} else if (userType === 'female') {
+			Model = FemaleUser;
+		} else if (userType === 'agency') {
+			Model = AgencyUser;
+		}
 		const user = await Model.findByIdAndUpdate(userId, { status }, { new: true });
 		if (!user) return res.status(404).json({ success: false, message: messages.COMMON.USER_NOT_FOUND });
 		return res.json({ success: true, data: user });

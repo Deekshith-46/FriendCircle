@@ -129,6 +129,11 @@ exports.agencyLogin = async (req, res) => {
     if (!agency.isVerified) {
       return res.status(400).json({ success: false, message: messages.AUTH.ACCOUNT_NOT_VERIFIED });
     }
+    
+    // Check if agency is active
+    if (agency.status === 'inactive') {
+      return res.status(403).json({ success: false, message: messages.AUTH.ACCOUNT_DEACTIVATED });
+    }
 
     // Generate new OTP for login
     const otp = Math.floor(1000 + Math.random() * 9000);

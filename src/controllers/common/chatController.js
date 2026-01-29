@@ -1042,9 +1042,15 @@ exports.sendMessage = async (req, res) => {
       previewMessage = '🙂 Emoji';
     }
 
-    room.lastMessage = previewMessage;
-    room.lastMessageAt = new Date();
-    await room.save();
+    // Use targeted update to avoid validation issues with existing lastReadBy entries
+    await ChatRoom.findByIdAndUpdate(
+      roomId,
+      { 
+        lastMessage: previewMessage,
+        lastMessageAt: new Date()
+      },
+      { new: true }
+    );
 
     // Revive chat if it was deleted by either participant
     await ChatRoom.updateOne(
