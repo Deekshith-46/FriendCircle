@@ -2,6 +2,8 @@ const AgencyKYC = require('../../models/agency/KYC');
 const mongoose = require('mongoose');
 const { isValidEmail, isValidMobile } = require('../../validations/validations');
 const messages = require('../../validations/messages');
+const notificationService = require('../../services/notificationService');
+const notificationEvents = require('../../constants/notificationEvents');
 
 // Submit KYC for agency
 exports.submitKYC = async (req, res) => {
@@ -75,6 +77,16 @@ exports.submitKYC = async (req, res) => {
     
     await user.save();
     
+    // Notify admin about new KYC submission
+    notificationService.handleEvent(
+      notificationEvents.KYC_SUBMITTED,
+      {
+        entityId: req.user.id,
+        entityType: 'agency',
+        method
+      }
+    );
+    
     res.json({ success: true, message: messages.AGENCY.KYC_SUBMITTED });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -136,6 +148,17 @@ exports.verifyKYC = async (req, res) => {
     }
     
     await user.save();
+    
+    // Notify user about KYC status change
+    notificationService.handleEvent(
+      status === 'approved' ? notificationEvents.KYC_APPROVED : notificationEvents.KYC_REJECTED,
+      {
+        entityId: kyc.user,
+        entityType: 'agency',
+        status,
+        processedBy: 'admin'
+      }
+    );
     
     res.json({ success: true, data: kyc });
   } catch (err) {

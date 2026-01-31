@@ -5,9 +5,9 @@ const Transaction = require('../../models/common/Transaction');
 const razorpay = require('../../config/razorpay');
 const AdminConfig = require('../../models/admin/AdminConfig');
 const { isValidEmail, isValidMobile } = require('../../validations/validations');
-
-// Get available payout methods for the user
 const messages = require('../../validations/messages');
+const notificationService = require('../../services/notificationService');
+const notificationEvents = require('../../constants/notificationEvents');
 
 function ensureKycVerified(user, userType) {
   if (userType === 'female') {
@@ -211,6 +211,17 @@ exports.createWithdrawalRequest = async (req, res) => {
       status: 'pending'
     });
     
+    // Notify admin about new withdrawal request
+    notificationService.handleEvent(
+      notificationEvents.WITHDRAWAL_REQUEST,
+      {
+        entityId: user._id,
+        entityType: userType,
+        amount: amountInRupees,
+        coins: coinsRequested
+      }
+    );
+    
     return res.status(201).json({ 
       success: true, 
       message: messages.WITHDRAWAL.WITHDRAWAL_SUCCESS,
@@ -294,6 +305,18 @@ exports.adminApproveWithdrawal = async (req, res) => {
     request.processedBy = req.admin?._id || req.staff?._id;
     await request.save();
     
+    // Notify user about withdrawal approval
+    notificationService.handleEvent(
+      notificationEvents.WITHDRAWAL_APPROVED,
+      {
+        entityId: request.userId,
+        entityType: request.userType,
+        amount: request.amountInRupees,
+        processedBy: 'admin',
+        status: 'approved'
+      }
+    );
+    
     return res.json({ success: true, message: messages.WITHDRAWAL.WITHDRAWAL_APPROVED, data: request });
   } catch (err) {
     console.error('Error approving withdrawal:', err);
@@ -314,6 +337,19 @@ exports.adminRejectWithdrawal = async (req, res) => {
     request.notes = reason;
     request.processedBy = req.admin?._id || req.staff?._id;
     await request.save();
+    
+    // Notify user about withdrawal rejection
+    notificationService.handleEvent(
+      notificationEvents.WITHDRAWAL_REJECTED,
+      {
+        entityId: request.userId,
+        entityType: request.userType,
+        amount: request.amountInRupees,
+        reason,
+        processedBy: 'admin',
+        status: 'rejected'
+      }
+    );
     
     // Refund coins to user on rejection
     const userModel = request.userType === 'female' ? FemaleUser : AgencyUser;

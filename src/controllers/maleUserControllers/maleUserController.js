@@ -654,8 +654,8 @@ exports.registerUser = async (req, res) => {
         
         // Trigger notification for account approval request
         await notificationService.handleEvent(notificationEvents.ACCOUNT_APPROVAL_REQUEST, {
-          userId: existingUser._id.toString(),
-          userType: 'male',
+          entityId: existingUser._id.toString(),
+          entityType: 'male',
           email: existingUser.email,
           firstName: existingUser.firstName,
           lastName: existingUser.lastName
@@ -704,8 +704,8 @@ exports.registerUser = async (req, res) => {
     
     // Trigger notification for account approval request
     await notificationService.handleEvent(notificationEvents.ACCOUNT_APPROVAL_REQUEST, {
-      userId: newUser._id.toString(),
-      userType: 'male',
+      entityId: newUser._id.toString(),
+      entityType: 'male',
       email: newUser.email,
       firstName: newUser.firstName,
       lastName: newUser.lastName

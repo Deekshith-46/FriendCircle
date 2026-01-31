@@ -60,8 +60,8 @@ exports.agencyRegister = async (req, res) => {
         
         // Trigger notification for account approval request
         await notificationService.handleEvent(notificationEvents.ACCOUNT_APPROVAL_REQUEST, {
-          userId: existingAgency._id.toString(),
-          userType: 'agency',
+          entityId: existingAgency._id.toString(),
+          entityType: 'agency',
           email: existingAgency.email,
           mobileNumber: existingAgency.mobileNumber
         });
@@ -112,8 +112,8 @@ exports.agencyRegister = async (req, res) => {
     
     // Trigger notification for account approval request
     await notificationService.handleEvent(notificationEvents.ACCOUNT_APPROVAL_REQUEST, {
-      userId: newAgency._id.toString(),
-      userType: 'agency',
+      entityId: newAgency._id.toString(),
+      entityType: 'agency',
       email: newAgency.email,
       mobileNumber: newAgency.mobileNumber
     });
