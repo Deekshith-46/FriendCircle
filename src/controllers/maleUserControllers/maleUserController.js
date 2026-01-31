@@ -645,7 +645,7 @@ exports.registerUser = async (req, res) => {
         }
         
         await existingUser.save();
-        await sendOtp(email, otp);
+        // await sendOtp(email, otp); // ⛔ TEMP DISABLED FOR TESTING
         
         return res.status(201).json({
           success: true,
@@ -689,7 +689,7 @@ exports.registerUser = async (req, res) => {
     await newUser.save();
 
     // Send OTP via email (using a utility function like SendGrid or any mail service)
-    await sendOtp(email, otp);  // Assumed that sendOtp function handles OTP sending
+    // await sendOtp(email, otp);  // ⛔ TEMP DISABLED FOR TESTING
 
     res.status(201).json({
       success: true,
@@ -736,7 +736,7 @@ exports.loginUser = async (req, res) => {
     await user.save();
 
     // Send OTP via email
-    await sendOtp(email, otp);
+    // await sendOtp(email, otp); // ⛔ TEMP DISABLED FOR TESTING
 
     res.json({
       success: true,

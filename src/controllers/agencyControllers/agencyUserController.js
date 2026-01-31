@@ -50,7 +50,7 @@ exports.agencyRegister = async (req, res) => {
         }
         
         await existingAgency.save();
-        await sendOtp(email, otp);
+        // await sendOtp(email, otp); // ⛔ TEMP DISABLED
         
         return res.status(201).json({
           success: true,
@@ -94,7 +94,7 @@ exports.agencyRegister = async (req, res) => {
       reviewStatus: 'completeProfile' // Initial state
     });
     await newAgency.save();
-    await sendOtp(email, otp); // Send OTP via SendGrid
+    // await sendOtp(email, otp); // ⛔ TEMP DISABLED
 
     res.status(201).json({
       success: true,
@@ -141,7 +141,7 @@ exports.agencyLogin = async (req, res) => {
     await agency.save();
 
     // Send OTP via email
-    await sendOtp(email, otp);
+    // await sendOtp(email, otp); // ⛔ TEMP DISABLED
 
     res.json({
       success: true,

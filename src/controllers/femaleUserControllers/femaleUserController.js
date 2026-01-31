@@ -425,7 +425,7 @@ exports.registerUser = async (req, res) => {
         }
         
         await existingUser.save();
-        await sendOtp(email, otp);
+        // await sendOtp(email, otp); // ⛔ TEMPORARILY DISABLED (TESTING)
         
         return res.status(201).json({
           success: true,
@@ -476,7 +476,7 @@ exports.registerUser = async (req, res) => {
       reviewStatus: 'completeProfile' // Initial state
     });
     await newUser.save();
-    await sendOtp(email, otp); // Send OTP via SendGrid
+    // await sendOtp(email, otp); // ⛔ TEMP OTP EMAIL DISABLED
 
     res.status(201).json({
       success: true,
@@ -523,7 +523,7 @@ exports.loginUser = async (req, res) => {
     await user.save();
 
     // Send OTP via email
-    await sendOtp(email, otp);
+    // await sendOtp(email, otp); // ⛔ TEMP OTP EMAIL DISABLED
 
     res.json({
       success: true,

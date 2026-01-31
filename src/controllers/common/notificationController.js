@@ -10,7 +10,7 @@ exports.saveFCMToken = async (req, res) => {
   try {
     const { fcmToken, deviceId, platform } = req.body;
     const userId = req.user.id;
-    const userType = req.user.type; // 'male' or 'female'
+    const userType = req.userType; // 'male' or 'female'
 
     // Validate input
     if (!fcmToken) {
@@ -21,7 +21,7 @@ exports.saveFCMToken = async (req, res) => {
     }
 
     // Validate user type
-    if (!['male', 'female'].includes(userType)) {
+    if (!['male', 'female', 'agency'].includes(userType)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid user type'
@@ -73,7 +73,7 @@ exports.removeFCMToken = async (req, res) => {
   try {
     const { fcmToken } = req.body;
     const userId = req.user.id;
-    const userType = req.user.type;
+    const userType = req.userType;
 
     // Validate input
     if (!fcmToken) {
@@ -113,13 +113,15 @@ exports.removeFCMToken = async (req, res) => {
 exports.getRegisteredDevices = async (req, res) => {
   try {
     const userId = req.user.id;
-    const userType = req.user.type;
+    const userType = req.userType;
 
     let User;
     if (userType === 'male') {
       User = require('../../models/maleUser/MaleUser');
     } else if (userType === 'female') {
       User = require('../../models/femaleUser/FemaleUser');
+    } else if (userType === 'agency') {
+      User = require('../../models/agency/AgencyUser');
     }
 
     const user = await User.findById(userId).select('fcmTokens');

@@ -2,6 +2,7 @@
 const { getMessaging } = require('../config/firebase');
 const MaleUser = require('../models/maleUser/MaleUser');
 const FemaleUser = require('../models/femaleUser/FemaleUser');
+const AgencyUser = require('../models/agency/AgencyUser');
 const { getIO, getSocketIdForUser } = require('../socketInstance');
 
 /**
@@ -19,6 +20,8 @@ const sendPushNotification = async (userId, userType, payload) => {
       user = await MaleUser.findById(userId).select('fcmTokens name firstName lastName');
     } else if (userType === 'female') {
       user = await FemaleUser.findById(userId).select('fcmTokens name');
+    } else if (userType === 'agency') {
+      user = await AgencyUser.findById(userId).select('fcmTokens firstName lastName');
     }
 
     if (!user || !user.fcmTokens || user.fcmTokens.length === 0) {
@@ -97,6 +100,11 @@ const sendChatMessageNotification = async (senderId, senderType, receiverId, rec
       sender = await FemaleUser.findById(senderId).select('name');
       if (sender) {
         senderName = sender.name || 'Female User';
+      }
+    } else if (senderType === 'agency') {
+      sender = await AgencyUser.findById(senderId).select('firstName lastName');
+      if (sender) {
+        senderName = `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || 'Agency User';
       }
     }
 
@@ -201,6 +209,8 @@ const saveFCMToken = async (userId, userType, fcmToken, deviceInfo = {}) => {
       User = MaleUser;
     } else if (userType === 'female') {
       User = FemaleUser;
+    } else if (userType === 'agency') {
+      User = AgencyUser;
     } else {
       throw new Error('Invalid user type');
     }
@@ -266,6 +276,8 @@ const removeFCMToken = async (userId, userType, fcmToken) => {
       User = MaleUser;
     } else if (userType === 'female') {
       User = FemaleUser;
+    } else if (userType === 'agency') {
+      User = AgencyUser;
     } else {
       throw new Error('Invalid user type');
     }

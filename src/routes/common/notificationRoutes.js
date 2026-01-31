@@ -17,7 +17,7 @@ router.get('/devices', auth, notificationController.getRegisteredDevices);
 router.post('/test', auth, async (req, res) => {
   const { targetUserId, targetType, title, body, data } = req.body;
   const senderUserId = req.user.id;
-  const senderUserType = req.user.type;
+  const senderUserType = req.userType;
 
   // Validate inputs
   if (!targetUserId || !targetType || !title || !body) {
@@ -28,7 +28,7 @@ router.post('/test', auth, async (req, res) => {
   }
 
   // Validate user types
-  if (!['male', 'female'].includes(targetType)) {
+  if (!['male', 'female', 'agency'].includes(targetType)) {
     return res.status(400).json({
       success: false,
       message: 'Invalid target user type'

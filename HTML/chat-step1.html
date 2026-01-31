@@ -68,6 +68,7 @@ body{margin:0;font-family:Segoe UI;background:#eaeef3}
     <input id="api" value="http://localhost:5001">
     <input id="token" placeholder="JWT Token">
     <button onclick="init()">Load</button>
+    <button onclick="initFCM()">Enable Notifications</button>
   </div>
   <div id="rooms" class="chat-list"></div>
 </div>
@@ -90,37 +91,90 @@ let recorder,audioChunks=[];
 
 /* ---------- AUTH ---------- */
 function decode(){
- const p=JSON.parse(atob(token.value.split('.')[1]));
- currentUser={id:p.id,type:p.type};
+  try {
+    if (!token.value) {
+      alert("Please enter JWT token");
+      return false;
+    }
+
+    const payload = JSON.parse(atob(token.value.split(".")[1]));
+    currentUser = { id: payload.id, type: payload.type };
+    return true;
+  } catch (err) {
+    alert("Invalid or expired JWT token");
+    console.error("JWT decode error:", err);
+    return false;
+  }
 }
 
 function init(){
- decode();
+  if(!decode()) return;
 
- socket = io(api.value);
- socket.emit("authenticate", token.value);
+  // Prevent multiple socket connections
+  if (socket && socket.connected) {
+    console.log("Socket already connected");
+    return;
+  }
 
- socket.on("authenticated",()=>{
-   loadRooms();
-   initFCM();
- });
+  socket = io(api.value);
+
+  socket.emit("authenticate", token.value);
+
+  socket.on("authenticated", () => {
+    console.log("Socket authenticated");
+    loadRooms();
+  });
+
+  socket.on("unauthorized", () => {
+    alert("Socket authentication failed");
+  });
+
+  socket.on("connect_error", (err) => {
+    console.error("Socket error:", err.message);
+    alert("Connection failed: " + err.message);
+  });
 
  socket.on("newMessage",onNewMessage);
  socket.on("messageRead",updateTicks);
  socket.on("typing",onTyping);
+ 
+ // Add missing socket event listeners for proper chat functionality
+ socket.on("messageDelivered", ({ roomId }) => {
+   if (roomId === currentRoom?._id) {
+     loadMessages();
+   }
+ });
+ 
+ socket.on("messageRead", () => {
+   loadRooms();   // updates unread badge
+   loadMessages();
+ });
 }
 
 /* ---------- ROOMS ---------- */
 async function loadRooms(){
- const res=await fetch(api.value+"/chat/rooms",{
-   headers:{Authorization:"Bearer "+token.value}
- });
- const json=await res.json();
- rooms.innerHTML="";
+  const res = await fetch(api.value + "/chat/rooms", {
+    headers:{ Authorization: "Bearer " + token.value }
+  });
+
+  const json = await res.json();
+  console.log("Rooms API response:", json);
+
+  rooms.innerHTML = "";
+
+  if (!json.success || !json.data || json.data.length === 0) {
+    rooms.innerHTML = "<div style='padding:12px;color:#777'>No chats found</div>";
+    return;
+  }
 
  (json.data||[]).forEach(r=>{
-  const other=r.participants.find(p=>p.userType!==currentUser.type);
-  if(!other) return;
+  // Defensive participant lookup
+  const other = r.participants.find(p => p.userType !== currentUser.type);
+  
+  if (!other || !other.userId) {
+    console.warn("Invalid participant data:", r);
+    return;
+  }
 
   // Check if user is online (this would need to come from the backend in a real implementation)
   const isOnline = checkIfUserIsOnline(other.userId._id, other.userType);
@@ -131,16 +185,24 @@ async function loadRooms(){
   div.onclick=()=>openRoom(r);
   // Store user ID in data attribute for easier access
   div.setAttribute('data-user-id', other.userId._id);
-  div.innerHTML=`
-   <div style="position:relative">
-     <img class="chat-avatar" src="${other.userId.image}">
-     <div style="position:absolute;bottom:0;right:0;font-size:12px;">${statusIndicator}</div>
-   </div>
-   <div class="chat-info">
-     <div class="chat-name">${other.userId.name} <span style="font-size:10px;color:${isOnline ? '#22c55e' : '#9ca3af'}">${isOnline ? 'Online' : 'Offline'}</span></div>
-     <div class="chat-last">${r.lastMessage||""}</div>
-   </div>
-   ${r.unreadCount>0?`<div class="unread">${r.unreadCount}</div>`:""}
+  // Handle different user data structures
+  const userName = other.userId.name || 
+                  (other.userId.firstName && other.userId.lastName ? 
+                   `${other.userId.firstName} ${other.userId.lastName}` : 
+                   "Unknown User");
+  
+  const userImage = other.userId.image || other.userId.profileImage || "https://placehold.co/40";
+  
+  div.innerHTML = `
+    <div style="position:relative">
+      <img class="chat-avatar" src="${userImage}">
+      <div style="position:absolute;bottom:0;right:0;font-size:12px;">${statusIndicator}</div>
+    </div>
+    <div class="chat-info">
+      <div class="chat-name">${userName} <span style="font-size:10px;color:${isOnline ? '#22c55e' : '#9ca3af'}">${isOnline ? 'Online' : 'Offline'}</span></div>
+      <div class="chat-last">${r.lastMessage?.content || r.lastMessage || "No messages"}</div>
+    </div>
+    ${r.unreadCount > 0 ? `<div class="unread">${r.unreadCount}</div>` : ""}
   `;
   rooms.appendChild(div);
  });
@@ -619,30 +681,75 @@ function view(html){
 }
 
 /* ---------- FCM ---------- */
-function initFCM(){
- firebase.initializeApp({
-  apiKey:"AIzaSyATP24MQ3PITrpoBsBoEJvC_efQf99romo",
-  authDomain:"friendcircle-notifications.firebaseapp.com",
-  projectId:"friendcircle-notifications",
-  messagingSenderId:"336749988199",
-  appId:"1:336749988199:web:4cb9b0d9ff27d63c9987c2"
- });
- const msg=firebase.messaging();
- Notification.requestPermission().then(async p=>{
-  if(p==="granted"){
-   const t=await msg.getToken({
-     vapidKey:"BIYvvagGTdBsoQuh7ujnR4YNRl57ScQcutv66AHPb5ZsHHhQiwXM7P5oCVja3qriIggIniKsgbZpN_U6fhHj2zs"
-   });
-   await fetch(api.value+"/notification/save-token",{
-    method:"POST",
-    headers:{
-      Authorization:"Bearer "+token.value,
-      "Content-Type":"application/json"
-    },
-    body:JSON.stringify({fcmToken:t,platform:"web"})
-   });
+async function initFCM() {
+  // Check if user is logged in
+  if (!document.getElementById("token").value) {
+    alert("Please login first");
+    return;
   }
- });
+
+  if (!("Notification" in window)) {
+    alert("Notifications not supported");
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    if (Notification.permission === "denied") {
+      alert("Notifications are blocked. Enable them from browser settings.");
+    } else {
+      alert("Permission denied");
+    }
+    return;
+  }
+
+  if (!firebase.apps.length) {
+    firebase.initializeApp({
+      apiKey:"AIzaSyATP24MQ3PITrpoBsBoEJvC_efQf99romo",
+      authDomain:"friendcircle-notifications.firebaseapp.com",
+      projectId:"friendcircle-notifications",
+      messagingSenderId:"336749988199",
+      appId:"1:336749988199:web:4cb9b0d9ff27d63c9987c2"
+    });
+  }
+
+  if ('serviceWorker' in navigator) {
+    try {
+      await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      console.log('Service worker registered');
+    } catch (error) {
+      console.error('Service worker registration failed:', error);
+    }
+  }
+
+  const messaging = firebase.messaging();
+  const fcmToken = await messaging.getToken({
+    vapidKey: "BIYvvagGTdBsoQuh7ujnR4YNRl57ScQcutv66AHPb5ZsHHhQiwXM7P5oCVja3qriIggIniKsgbZpN_U6fhHj2zs"
+  });
+
+  if (!fcmToken) {
+    console.log('Failed to get FCM token');
+    return;
+  }
+
+  const response = await fetch(api.value + "/notification/save-token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + document.getElementById("token").value
+    },
+    body: JSON.stringify({
+      fcmToken: fcmToken,
+      platform: "web"
+    })
+  });
+
+  if (response.ok) {
+    alert("Notifications enabled ✅");
+  } else {
+    const errorText = await response.text();
+    alert("Failed to register FCM token: " + errorText);
+  }
 }
 </script>
 </body>
