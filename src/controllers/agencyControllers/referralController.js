@@ -36,7 +36,7 @@ async function getReferredFemaleUsers(req, res) {
     const agencyWithFemales = await AgencyUser.findById(agencyId)
       .populate({
         path: 'referredFemaleUsers',
-        select: 'name email images reviewStatus isActive createdAt',
+        select: 'name email images reviewStatus isActive createdAt onlineStatus',
         populate: { path: 'images', select: 'imageUrl' }
       });
     
@@ -61,6 +61,7 @@ async function getReferredFemaleUsers(req, res) {
         profileImage: profileImageUrl,
         reviewStatus: user.reviewStatus,
         isActive: user.isActive,
+        onlineStatus: user.onlineStatus || false,
         joinedAt: user.createdAt
       };
     });
