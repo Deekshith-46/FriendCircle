@@ -12,6 +12,9 @@ const { isValidEmail, isValidMobile } = require('../../validations/validations')
 const messages = require('../../validations/messages');
 const notificationService = require('../../services/notificationService');
 const notificationEvents = require('../../constants/notificationEvents');
+const ChatRoom = require('../../models/chat/ChatRoom');
+const Message = require('../../models/chat/Message');
+const Transaction = require('../../models/common/Transaction');
 
 // Helper function to award referral bonuses
 const awardReferralBonus = async (user, adminConfig) => {
@@ -422,7 +425,12 @@ exports.registerUser = async (req, res) => {
           if (referredByUser) {
             existingUser.referredByFemale = [referredByUser._id];
           } else if (referredByAgency) {
-            existingUser.referredByAgency = [referredByAgency._id];
+            existingUser.referredByAgency = referredByAgency._id;
+            // Also update agency's referred female users list
+            await AgencyUser.findByIdAndUpdate(
+              referredByAgency._id,
+              { $addToSet: { referredFemaleUsers: existingUser._id } }
+            );
           }
         }
         
@@ -479,13 +487,22 @@ exports.registerUser = async (req, res) => {
       otp, 
       referralCode: myReferral, 
       referredByFemale: referredByFemale ? [referredByFemale._id] : [], 
-      referredByAgency: referredByAgency ? [referredByAgency._id] : [],
+      referredByAgency: referredByAgency ? referredByAgency._id : null,
       isVerified: false,      // Will be true after OTP verification
       isActive: false,        // Will be true after OTP verification
       profileCompleted: false, // Will be true after profile completion
       reviewStatus: 'completeProfile' // Initial state
     });
     await newUser.save();
+    
+    // Update agency's referred female users list if referral was used
+    if (referredByAgency) {
+      await AgencyUser.findByIdAndUpdate(
+        referredByAgency._id,
+        { $addToSet: { referredFemaleUsers: newUser._id } }
+      );
+    }
+    
     // await sendOtp(email, otp); // ⛔ TEMP OTP EMAIL DISABLED
     
     // Trigger notification for account approval request
@@ -1993,5 +2010,80 @@ exports.updateLocation = async (req, res) => {
   } catch (err) {
     console.error('❌ Error in updateLocation:', err);
     return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Delete female user account permanently
+exports.deleteAccount = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    
+    console.log(`Deleting female user account: ${userId}`);
+    
+    // Find the user first to get reference data
+    const user = await FemaleUser.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Delete related chat rooms and messages
+    const chatRooms = await ChatRoom.find({
+      'participants.userId': userId
+    });
+    
+    console.log(`Found ${chatRooms.length} chat rooms to delete`);
+    
+    // Delete messages from these rooms
+    for (const room of chatRooms) {
+      await Message.deleteMany({ chatRoomId: room._id });
+    }
+    
+    // Delete the chat rooms themselves
+    await ChatRoom.deleteMany({
+      'participants.userId': userId
+    });
+    
+    // Delete transactions
+    const deletedTransactions = await Transaction.deleteMany({
+      userId: userId
+    });
+    
+    // Delete withdrawal requests
+    const deletedWithdrawals = await WithdrawalRequest.deleteMany({
+      userId: userId
+    });
+    
+    // Delete user images
+    await FemaleImage.deleteMany({
+      userId: userId
+    });
+    
+    // Finally, delete the user account
+    await FemaleUser.findByIdAndDelete(userId);
+    
+    console.log(`Account deletion completed for user: ${userId}`);
+    
+    res.json({
+      success: true,
+      message: 'Account permanently deleted',
+      data: {
+        chatRoomsDeleted: chatRooms.length,
+        messagesDeleted: 'All messages in user rooms',
+        transactionsDeleted: deletedTransactions.deletedCount,
+        withdrawalsDeleted: deletedWithdrawals.deletedCount,
+        imagesDeleted: 'All user images'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error deleting female user account:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting account',
+      error: error.message
+    });
   }
 };

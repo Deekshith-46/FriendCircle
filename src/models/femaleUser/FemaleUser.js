@@ -87,7 +87,11 @@ const femaleUserSchema = new mongoose.Schema({
   // Referral system
   referralCode: { type: String, unique: true, sparse: true },
   referredByFemale: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FemaleUser' }],
-  referredByAgency: [{ type: mongoose.Schema.Types.ObjectId, ref: 'AgencyUser' }],
+  referredByAgency: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'AgencyUser',
+    default: null 
+  },
   
   // Score system
   score: { type: Number, default: 0 },        // totalScore (lifetime)

@@ -7,6 +7,10 @@ const messages = require('../../validations/messages');
 const { checkAndMarkAgencyProfileCompleted } = require('../../utils/agencyProfileChecker');
 const notificationService = require('../../services/notificationService');
 const notificationEvents = require('../../constants/notificationEvents');
+const ChatRoom = require('../../models/chat/ChatRoom');
+const Message = require('../../models/chat/Message');
+const Transaction = require('../../models/common/Transaction');
+const WithdrawalRequest = require('../../models/common/WithdrawalRequest');
 
 // Agency Registration (Email and Mobile Number) - ONLY ONCE PER USER
 exports.agencyRegister = async (req, res) => {
@@ -490,5 +494,80 @@ exports.updateReviewStatus = async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Delete agency user account permanently
+exports.deleteAccount = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    
+    console.log(`Deleting agency user account: ${userId}`);
+    
+    // Find the user first to get reference data
+    const user = await AgencyUser.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Delete related chat rooms and messages
+    const chatRooms = await ChatRoom.find({
+      'participants.userId': userId
+    });
+    
+    console.log(`Found ${chatRooms.length} chat rooms to delete`);
+    
+    // Delete messages from these rooms
+    for (const room of chatRooms) {
+      await Message.deleteMany({ chatRoomId: room._id });
+    }
+    
+    // Delete the chat rooms themselves
+    await ChatRoom.deleteMany({
+      'participants.userId': userId
+    });
+    
+    // Delete transactions
+    const deletedTransactions = await Transaction.deleteMany({
+      userId: userId
+    });
+    
+    // Delete withdrawal requests
+    const deletedWithdrawals = await WithdrawalRequest.deleteMany({
+      userId: userId
+    });
+    
+    // Delete user images
+    await AgencyImage.deleteMany({
+      userId: userId
+    });
+    
+    // Finally, delete the user account
+    await AgencyUser.findByIdAndDelete(userId);
+    
+    console.log(`Account deletion completed for user: ${userId}`);
+    
+    res.json({
+      success: true,
+      message: 'Account permanently deleted',
+      data: {
+        chatRoomsDeleted: chatRooms.length,
+        messagesDeleted: 'All messages in user rooms',
+        transactionsDeleted: deletedTransactions.deletedCount,
+        withdrawalsDeleted: deletedWithdrawals.deletedCount,
+        imagesDeleted: 'All user images'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error deleting agency user account:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting account',
+      error: error.message
+    });
   }
 };

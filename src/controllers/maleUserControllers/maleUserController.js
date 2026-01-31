@@ -16,6 +16,9 @@ const { isValidEmail, isValidMobile } = require('../../validations/validations')
 const messages = require('../../validations/messages');
 const notificationService = require('../../services/notificationService');
 const notificationEvents = require('../../constants/notificationEvents');
+const ChatRoom = require('../../models/chat/ChatRoom');
+const Message = require('../../models/chat/Message');
+const WithdrawalRequest = require('../../models/common/WithdrawalRequest');
 
 // Update user interests
 exports.updateInterests = async (req, res) => {
@@ -2061,4 +2064,79 @@ exports.getDashboard = async (req, res) => {
 };
 
 // Update male user location
+
+// Delete male user account permanently
+exports.deleteAccount = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    
+    console.log(`Deleting male user account: ${userId}`);
+    
+    // Find the user first to get reference data
+    const user = await MaleUser.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Delete related chat rooms and messages
+    const chatRooms = await ChatRoom.find({
+      'participants.userId': userId
+    });
+    
+    console.log(`Found ${chatRooms.length} chat rooms to delete`);
+    
+    // Delete messages from these rooms
+    for (const room of chatRooms) {
+      await Message.deleteMany({ chatRoomId: room._id });
+    }
+    
+    // Delete the chat rooms themselves
+    await ChatRoom.deleteMany({
+      'participants.userId': userId
+    });
+    
+    // Delete transactions
+    const deletedTransactions = await Transaction.deleteMany({
+      userId: userId
+    });
+    
+    // Delete withdrawal requests
+    const deletedWithdrawals = await WithdrawalRequest.deleteMany({
+      userId: userId
+    });
+    
+    // Delete user images
+    await Image.deleteMany({
+      userId: userId
+    });
+    
+    // Finally, delete the user account
+    await MaleUser.findByIdAndDelete(userId);
+    
+    console.log(`Account deletion completed for user: ${userId}`);
+    
+    res.json({
+      success: true,
+      message: 'Account permanently deleted',
+      data: {
+        chatRoomsDeleted: chatRooms.length,
+        messagesDeleted: 'All messages in user rooms',
+        transactionsDeleted: deletedTransactions.deletedCount,
+        withdrawalsDeleted: deletedWithdrawals.deletedCount,
+        imagesDeleted: 'All user images'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error deleting male user account:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting account',
+      error: error.message
+    });
+  }
+};
 

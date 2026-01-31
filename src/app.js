@@ -58,9 +58,11 @@ app.use('/female-user/kyc', require('./routes/femaleUserRoutes/kycRoutes'));  //
 app.use('/female-user/withdrawals', require('./routes/femaleUserRoutes/withdrawalRoutes'));  // Withdrawal Routes
 app.use('/female-user/blocklist', require('./routes/femaleUserRoutes/blockListRoutes'));  // Blocklist Routes
 app.use('/female-user', require('./routes/femaleUserRoutes/scoreRoutes'));  // Score Routes (mounted directly under /female-user)
+app.use('/female-user', require('./routes/femaleUserRoutes/deleteAccountRoutes')); // Female User Delete Account
 
 // Routes for Male User
 app.use('/male-user', require('./routes/maleUserRoutes/maleUserRoutes')); // Male User Routes
+app.use('/male-user', require('./routes/maleUserRoutes/deleteAccountRoutes')); // Male User Delete Account
 // Routes for Male User
 app.use('/male-user/favourites', require('./routes/maleUserRoutes/favouritesRoutes'));  // Favourites Routes
 app.use('/male-user/chat', require('./routes/maleUserRoutes/chatRoutes')); // Chat Routes
@@ -72,6 +74,7 @@ app.use('/male-user/gifts', require('./routes/maleUserRoutes/giftRoutes')); // G
 // Routes for Agency User
 app.use('/agency', require('./routes/agencyRoutes/agencyUserRoutes')); // Main Agency Routes
 app.use('/agency/referrals', require('./routes/agencyRoutes/referralRoutes')); // Agency Referral Routes
+app.use('/agency', require('./routes/agencyRoutes/deleteAccountRoutes')); // Agency User Delete Account
 
 // Common routes
 app.use('/chat', require('./routes/common/chatRoutes'));

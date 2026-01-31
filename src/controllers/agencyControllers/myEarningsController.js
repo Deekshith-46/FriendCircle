@@ -23,11 +23,15 @@ const { resolveDateRange } = require('../../utils/dateUtils');
         // ✅ Smart date resolution (aligned with Figma)
         const { start, end } = resolveDateRange(startDate, endDate);
 
-        // 4️⃣ Get referred females
-        const females = await FemaleUser.find(
-        { referredByAgency: agencyId },
-        { _id: 1, firstName: 1, name: 1 }
-        );
+        // 4️⃣ Get referred females (using agency's stored list)
+        const agencyData = await AgencyUser.findById(agencyId).populate({
+          path: 'referredFemaleUsers',
+          select: '_id firstName name'
+        });
+                
+        const females = agencyData.referredFemaleUsers || [];
+        
+        
 
         const femaleMap = {};
         females.forEach(f => {

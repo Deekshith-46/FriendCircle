@@ -17,7 +17,8 @@ const agencyUserSchema = new mongoose.Schema({
 	image: { type: String },
 	referralCode: { type: String, unique: true, sparse: true },
 	// Referral system
-	referredByAgency: [{ type: mongoose.Schema.Types.ObjectId, ref: 'AgencyUser' }], 
+	referredByAgency: [{ type: mongoose.Schema.Types.ObjectId, ref: 'AgencyUser' }],
+	referredFemaleUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FemaleUser' }], 
 	status: { type: String, enum: ['active', 'inactive'], default: 'inactive' },
 	profileCompleted: { type: Boolean, default: false },
 	reviewStatus: { type: String, enum: ['completeProfile', 'pending', 'accepted', 'rejected'], default: 'completeProfile' },

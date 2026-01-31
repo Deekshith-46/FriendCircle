@@ -30,10 +30,21 @@ async function getReferredFemaleUsers(req, res) {
       });
     }
     
-    // Find female users who were referred by this agency
-    const referredFemaleUsers = await FemaleUser.find({
-      referredByAgency: agencyId
-    }).select('name email images reviewStatus isActive createdAt').populate('images');
+    console.log('Looking up agency with ID:', agencyId);
+    
+    // Find female users who were referred by this agency (using agency's stored list)
+    const agencyWithFemales = await AgencyUser.findById(agencyId)
+      .populate({
+        path: 'referredFemaleUsers',
+        select: 'name email images reviewStatus isActive createdAt',
+        populate: { path: 'images', select: 'imageUrl' }
+      });
+    
+    console.log('Agency lookup result:', !!agencyWithFemales);
+    console.log('Referred females count:', agencyWithFemales.referredFemaleUsers ? agencyWithFemales.referredFemaleUsers.length : 'undefined');
+    
+    const referredFemaleUsers = agencyWithFemales.referredFemaleUsers || [];
+    console.log('Final referred females array length:', referredFemaleUsers.length);
     
     // Format the response with proper profile image handling
     const formattedUsers = referredFemaleUsers.map(user => {
