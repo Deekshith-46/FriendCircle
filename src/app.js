@@ -71,10 +71,12 @@ app.use('/male-user/gifts', require('./routes/maleUserRoutes/giftRoutes')); // G
 
 // Routes for Agency User
 app.use('/agency', require('./routes/agencyRoutes/agencyUserRoutes')); // Main Agency Routes
+app.use('/agency/referrals', require('./routes/agencyRoutes/referralRoutes')); // Agency Referral Routes
 
 // Common routes
 app.use('/chat', require('./routes/common/chatRoutes'));
 app.use('/notification', require('./routes/common/notificationRoutes'));
+app.use('/notification-panel', require('./routes/common/notificationPanelRoutes'));
 
 // Error middleware
 app.use(require('./middlewares/errorMiddleware'));

@@ -10,6 +10,8 @@ const AdminConfig = require('../../models/admin/AdminConfig');
 const WithdrawalRequest = require('../../models/common/WithdrawalRequest');
 const { isValidEmail, isValidMobile } = require('../../validations/validations');
 const messages = require('../../validations/messages');
+const notificationService = require('../../services/notificationService');
+const notificationEvents = require('../../constants/notificationEvents');
 
 // Helper function to award referral bonuses
 const awardReferralBonus = async (user, adminConfig) => {
@@ -427,6 +429,14 @@ exports.registerUser = async (req, res) => {
         await existingUser.save();
         // await sendOtp(email, otp); // ⛔ TEMPORARILY DISABLED (TESTING)
         
+        // Trigger notification for account approval request
+        await notificationService.handleEvent(notificationEvents.ACCOUNT_APPROVAL_REQUEST, {
+          userId: existingUser._id.toString(),
+          userType: 'female',
+          email: existingUser.email,
+          mobileNumber: existingUser.mobileNumber
+        });
+        
         return res.status(201).json({
           success: true,
           message: messages.AUTH.OTP_SENT_EMAIL,
@@ -477,6 +487,14 @@ exports.registerUser = async (req, res) => {
     });
     await newUser.save();
     // await sendOtp(email, otp); // ⛔ TEMP OTP EMAIL DISABLED
+    
+    // Trigger notification for account approval request
+    await notificationService.handleEvent(notificationEvents.ACCOUNT_APPROVAL_REQUEST, {
+      userId: newUser._id.toString(),
+      userType: 'female',
+      email: newUser.email,
+      mobileNumber: newUser.mobileNumber
+    });
 
     res.status(201).json({
       success: true,

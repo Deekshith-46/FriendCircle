@@ -14,6 +14,8 @@ const Transaction = require('../../models/common/Transaction');
 const sendOtp = require('../../utils/sendOtp');  // Utility function to send OTP via email
 const { isValidEmail, isValidMobile } = require('../../validations/validations');
 const messages = require('../../validations/messages');
+const notificationService = require('../../services/notificationService');
+const notificationEvents = require('../../constants/notificationEvents');
 
 // Update user interests
 exports.updateInterests = async (req, res) => {
@@ -647,6 +649,15 @@ exports.registerUser = async (req, res) => {
         await existingUser.save();
         // await sendOtp(email, otp); // ⛔ TEMP DISABLED FOR TESTING
         
+        // Trigger notification for account approval request
+        await notificationService.handleEvent(notificationEvents.ACCOUNT_APPROVAL_REQUEST, {
+          userId: existingUser._id.toString(),
+          userType: 'male',
+          email: existingUser.email,
+          firstName: existingUser.firstName,
+          lastName: existingUser.lastName
+        });
+        
         return res.status(201).json({
           success: true,
           message: messages.AUTH.OTP_SENT_EMAIL,
@@ -687,7 +698,16 @@ exports.registerUser = async (req, res) => {
       isActive: false
     });
     await newUser.save();
-
+    
+    // Trigger notification for account approval request
+    await notificationService.handleEvent(notificationEvents.ACCOUNT_APPROVAL_REQUEST, {
+      userId: newUser._id.toString(),
+      userType: 'male',
+      email: newUser.email,
+      firstName: newUser.firstName,
+      lastName: newUser.lastName
+    });
+    
     // Send OTP via email (using a utility function like SendGrid or any mail service)
     // await sendOtp(email, otp);  // ⛔ TEMP DISABLED FOR TESTING
 

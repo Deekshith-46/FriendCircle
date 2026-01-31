@@ -3,6 +3,9 @@ const { getMessaging } = require('../config/firebase');
 const MaleUser = require('../models/maleUser/MaleUser');
 const FemaleUser = require('../models/femaleUser/FemaleUser');
 const AgencyUser = require('../models/agency/AgencyUser');
+const AdminUser = require('../models/admin/AdminUser');
+const Notification = require('../models/common/Notification');
+const notificationEvents = require('../constants/notificationEvents');
 const { getIO, getSocketIdForUser } = require('../socketInstance');
 
 /**
@@ -300,11 +303,221 @@ const removeFCMToken = async (userId, userType, fcmToken) => {
   }
 };
 
+/**
+ * Handle business events and send appropriate notifications
+ * @param {string} eventType - Type of event from notificationEvents
+ * @param {Object} payload - Event data
+ */
+const handleEvent = async (eventType, payload) => {
+  try {
+    let notificationData = null;
+    
+    switch (eventType) {
+      // Account Management Events
+      case notificationEvents.ACCOUNT_APPROVAL_REQUEST:
+        notificationData = await handleAccountApprovalRequest(payload);
+        break;
+        
+      case notificationEvents.ACCOUNT_APPROVED:
+        notificationData = await handleAccountApproved(payload);
+        break;
+        
+      case notificationEvents.KYC_SUBMITTED:
+        notificationData = await handleKYCSubmitted(payload);
+        break;
+        
+      case notificationEvents.KYC_APPROVED:
+      case notificationEvents.KYC_REJECTED:
+        notificationData = await handleKYCProcessed(payload, eventType);
+        break;
+        
+      case notificationEvents.WITHDRAWAL_REQUEST:
+        notificationData = await handleWithdrawalRequest(payload);
+        break;
+        
+      case notificationEvents.WITHDRAWAL_APPROVED:
+      case notificationEvents.WITHDRAWAL_REJECTED:
+        notificationData = await handleWithdrawalProcessed(payload, eventType);
+        break;
+        
+      default:
+        console.log(`Unknown event type: ${eventType}`);
+        return false;
+    }
+    
+    if (notificationData) {
+      // Save to database
+      await saveNotification(notificationData.receiverId, notificationData.receiverType, notificationData.title, notificationData.message, notificationData.type, notificationData.data, notificationData.priority);
+      
+      // Send push notification
+      await sendPushNotification(notificationData.receiverId, notificationData.receiverType, {
+        title: notificationData.title,
+        body: notificationData.message,
+        data: notificationData.data
+      });
+      
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error handling notification event:', error);
+    return false;
+  }
+};
+
+// Helper functions for specific events
+
+const handleAccountApprovalRequest = async (payload) => {
+  const { userId, userType } = payload;
+  
+  return {
+    receiverId: await getAdminId(), // Get first admin or designated admin
+    receiverType: 'admin',
+    title: 'New Account Pending Approval',
+    message: `New ${userType} account waiting for approval`,
+    type: notificationEvents.ACCOUNT_APPROVAL_REQUEST,
+    data: { userId, userType, ...payload },
+    priority: 'high'
+  };
+};
+
+const handleAccountApproved = async (payload) => {
+  const { userId, userType, approvedBy } = payload;
+  
+  return {
+    receiverId: userId,
+    receiverType: userType,
+    title: 'Account Approved!',
+    message: 'Your account has been approved 🎉',
+    type: notificationEvents.ACCOUNT_APPROVED,
+    data: { approvedBy, ...payload },
+    priority: 'high'
+  };
+};
+
+const handleKYCSubmitted = async (payload) => {
+  const { userId, userType } = payload;
+  
+  return {
+    receiverId: await getAdminId(),
+    receiverType: 'admin',
+    title: 'New KYC Verification Request',
+    message: 'New KYC verification request received',
+    type: notificationEvents.KYC_SUBMITTED,
+    data: { userId, userType, ...payload },
+    priority: 'high'
+  };
+};
+
+const handleKYCProcessed = async (payload, eventType) => {
+  const { userId, userType, processedBy, status } = payload;
+  
+  let message = 'Your KYC has been verified ✅';
+  if (eventType === notificationEvents.KYC_REJECTED) {
+    message = 'Your KYC was rejected. Please resubmit ❌';
+  }
+  
+  return {
+    receiverId: userId,
+    receiverType: userType,
+    title: 'KYC Status Updated',
+    message,
+    type: eventType,
+    data: { processedBy, status, ...payload },
+    priority: 'medium'
+  };
+};
+
+const handleWithdrawalRequest = async (payload) => {
+  const { userId, userType, amount } = payload;
+  
+  return {
+    receiverId: await getAdminId(),
+    receiverType: 'admin',
+    title: 'New Withdrawal Request',
+    message: `New withdrawal request received (₹${amount})`,
+    type: notificationEvents.WITHDRAWAL_REQUEST,
+    data: { userId, userType, amount, ...payload },
+    priority: 'high'
+  };
+};
+
+const handleWithdrawalProcessed = async (payload, eventType) => {
+  const { userId, userType, amount, processedBy, status } = payload;
+  
+  let message = 'Your withdrawal has been processed 💸';
+  if (eventType === notificationEvents.WITHDRAWAL_REJECTED) {
+    message = 'Your withdrawal request was rejected ❌';
+  }
+  
+  return {
+    receiverId: userId,
+    receiverType: userType,
+    title: 'Withdrawal Status Updated',
+    message,
+    type: eventType,
+    data: { amount, processedBy, status, ...payload },
+    priority: 'high'
+  };
+};
+
+// Helper to get admin ID
+const getAdminId = async () => {
+  try {
+    const admin = await AdminUser.findOne({}).select('_id');
+    return admin ? admin._id : null;
+  } catch (error) {
+    console.error('Error getting admin ID:', error);
+    return null;
+  }
+};
+
+// Save notification to database
+const saveNotification = async (receiverId, receiverType, title, message, type, data = {}, priority = 'medium') => {
+  try {
+    let receiverModel;
+    switch (receiverType) {
+      case 'admin':
+        receiverModel = 'AdminUser';
+        break;
+      case 'male':
+        receiverModel = 'MaleUser';
+        break;
+      case 'female':
+        receiverModel = 'FemaleUser';
+        break;
+      case 'agency':
+        receiverModel = 'AgencyUser';
+        break;
+      default:
+        return null;
+    }
+    
+    const notification = new Notification({
+      receiverId,
+      receiverModel,
+      receiverType,
+      title,
+      message,
+      type,
+      data,
+      priority
+    });
+    
+    return await notification.save();
+  } catch (error) {
+    console.error('Error saving notification:', error);
+    return null;
+  }
+};
+
 module.exports = {
   sendPushNotification,
   sendChatMessageNotification,
   saveFCMToken,
   removeFCMToken,
   getMessagePreview,
-  getSocketIdForUser // Export for use in controllers if needed
+  getSocketIdForUser, // Export for use in controllers if needed
+  handleEvent
 };

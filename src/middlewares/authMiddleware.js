@@ -51,12 +51,18 @@ const auth = async (req, res, next) => {
         }
         req.userType = 'male'; // Set user type
     } else if (req.originalUrl.startsWith('/agency')) {
+        console.log('=== AGENCY AUTH MIDDLEWARE ===');
+        console.log('Original URL:', req.originalUrl);
+        console.log('Decoded user ID:', decoded.id);
         // Agency user authentication
         req.user = await AgencyUser.findById(decoded.id);
+        console.log('Found agency user:', !!req.user);
         if (!req.user) {
+            console.log('Agency user not found');
             return res.status(404).json({ success: false, message: messages.AUTH_MIDDLEWARE.USER_NOT_FOUND });
         }
         req.userType = 'agency'; // Set user type
+        console.log('Agency auth successful, user type:', req.userType);
     } else {
         // General user authentication for other routes (like /chat)
         // Try to find user in different collections

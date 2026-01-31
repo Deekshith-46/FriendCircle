@@ -5,6 +5,8 @@ const sendOtp = require('../../utils/sendOtp');
 const { isValidEmail, isValidMobile } = require('../../validations/validations');
 const messages = require('../../validations/messages');
 const { checkAndMarkAgencyProfileCompleted } = require('../../utils/agencyProfileChecker');
+const notificationService = require('../../services/notificationService');
+const notificationEvents = require('../../constants/notificationEvents');
 
 // Agency Registration (Email and Mobile Number) - ONLY ONCE PER USER
 exports.agencyRegister = async (req, res) => {
@@ -52,6 +54,14 @@ exports.agencyRegister = async (req, res) => {
         await existingAgency.save();
         // await sendOtp(email, otp); // ⛔ TEMP DISABLED
         
+        // Trigger notification for account approval request
+        await notificationService.handleEvent(notificationEvents.ACCOUNT_APPROVAL_REQUEST, {
+          userId: existingAgency._id.toString(),
+          userType: 'agency',
+          email: existingAgency.email,
+          mobileNumber: existingAgency.mobileNumber
+        });
+        
         return res.status(201).json({
           success: true,
           message: messages.AUTH.OTP_SENT_EMAIL,
@@ -95,6 +105,14 @@ exports.agencyRegister = async (req, res) => {
     });
     await newAgency.save();
     // await sendOtp(email, otp); // ⛔ TEMP DISABLED
+    
+    // Trigger notification for account approval request
+    await notificationService.handleEvent(notificationEvents.ACCOUNT_APPROVAL_REQUEST, {
+      userId: newAgency._id.toString(),
+      userType: 'agency',
+      email: newAgency.email,
+      mobileNumber: newAgency.mobileNumber
+    });
 
     res.status(201).json({
       success: true,
