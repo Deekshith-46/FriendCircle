@@ -424,14 +424,21 @@ exports.registerUser = async (req, res) => {
           const referredByAgency = await AgencyUser.findOne({ referralCode });
           if (referredByUser) {
             existingUser.referredByFemale = [referredByUser._id];
+            existingUser.referredByAgency = undefined; // Clear agency referral if female referral is used
           } else if (referredByAgency) {
             existingUser.referredByAgency = referredByAgency._id;
+            existingUser.referredByFemale = []; // Clear female referral if agency referral is used
             // Also update agency's referred female users list
             await AgencyUser.findByIdAndUpdate(
               referredByAgency._id,
               { $addToSet: { referredFemaleUsers: existingUser._id } }
             );
           }
+        } else {
+          // No referral code provided - clear both referral fields
+          existingUser.referredByFemale = [];
+          // Use $unset to properly remove the field instead of setting to undefined
+          delete existingUser.referredByAgency;
         }
         
         await existingUser.save();
@@ -481,18 +488,24 @@ exports.registerUser = async (req, res) => {
     }
 
     // Create new user with initial state
-    const newUser = new FemaleUser({ 
+    const userData = { 
       email, 
       mobileNumber, 
       otp, 
       referralCode: myReferral, 
       referredByFemale: referredByFemale ? [referredByFemale._id] : [], 
-      referredByAgency: referredByAgency ? referredByAgency._id : null,
       isVerified: false,      // Will be true after OTP verification
       isActive: false,        // Will be true after OTP verification
       profileCompleted: false, // Will be true after profile completion
       reviewStatus: 'completeProfile' // Initial state
-    });
+    };
+    
+    // Only add referredByAgency if it exists (avoid setting undefined/null)
+    if (referredByAgency) {
+      userData.referredByAgency = referredByAgency._id;
+    }
+    
+    const newUser = new FemaleUser(userData);
     await newUser.save();
     
     // Update agency's referred female users list if referral was used
