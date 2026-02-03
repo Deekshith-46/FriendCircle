@@ -19,7 +19,6 @@ exports.loginAdmin = async (req, res) => {
         message: messages.COMMON.INVALID_EMAIL
       });
     }
-    console.log("git not working")
 
     
     if (userType === 'admin') {

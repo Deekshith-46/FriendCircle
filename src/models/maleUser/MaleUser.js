@@ -8,7 +8,6 @@ const maleUserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   bio: { type: String },
   dateOfBirth: { type: Date },
-  age: { type: Number },
   gender: { type: String, enum: ['male', 'female', 'other'] },
   interests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Interest' }],
   languages: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Language' }],
@@ -36,13 +35,13 @@ const maleUserSchema = new mongoose.Schema({
   relationshipGoals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'RelationGoal' }],
   religion: { type: mongoose.Schema.Types.ObjectId, ref: 'Religion' },
   height: { type: String },
-  searchPreferences: { type: String, enum: ['male', 'female', 'both'], default: 'female' },
+  // searchPreferences: { type: String, enum: ['male', 'female', 'both'], default: 'female' },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   favourites: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FemaleUser' }],
   malefollowing: [{ type: mongoose.Schema.Types.ObjectId, ref: 'MaleFollowing' }],
   malefollowers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'MaleFollowers' }], // Added missing followers array
   images: [{ type: mongoose.Schema.Types.ObjectId, ref: 'MaleImage' }], // Array of image references
-  balance: { type: Number, default: 0 }, // Deprecated: legacy combined balance
+  // balance: { type: Number, default: 0 }, // Deprecated: legacy combined balance
   walletBalance: { type: Number, default: 0 },
   coinBalance: { type: Number, default: 0 },
   isVerified: { type: Boolean, default: false },
@@ -56,15 +55,7 @@ const maleUserSchema = new mongoose.Schema({
   locationUpdatedAt: { type: Date },
   // Referral system
   referralCode: { type: String, unique: true, sparse: true }, // 8-char alphanumeric
-  referredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'MaleUser' }],
-  
-  // Push Notification FCM Tokens (support multiple devices)
-  fcmTokens: [{
-    token: { type: String, required: true },
-    deviceId: { type: String }, // Optional device identifier
-    platform: { type: String, enum: ['ios', 'android', 'web'] },
-    createdAt: { type: Date, default: Date.now }
-  }],
+  referredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'MaleUser' }], 
 }, { timestamps: true });
 
 module.exports = mongoose.model('MaleUser', maleUserSchema);
