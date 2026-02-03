@@ -4,6 +4,7 @@ const connectDB = require('./config/db');
 
 // Middleware
 app.use(express.json());
+app.use(express.static('public')); // Serve static files from public directory
 const cors = require('cors');
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || '*', credentials: true }));
 

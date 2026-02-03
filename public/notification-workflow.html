@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔔 Notification Workflow Test Panel</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        h1 {
+            color: #2c3e50;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+
+        .warning {
+            color: #e74c3c;
+            font-weight: bold;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(231, 76, 60, 0.1);
+            border-radius: 8px;
+            display: none;
+        }
+
+        .success {
+            color: #27ae60;
+            font-weight: bold;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(39, 174, 96, 0.1);
+            border-radius: 8px;
+            display: none;
+        }
+
+        .auth-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .form-group {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="tel"],
+        input[type="number"],
+        input[type="password"],
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #219653;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+        }
+
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #e67e22;
+            transform: translateY(-2px);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 14px;
+        }
+
+        .workflow-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .workflow-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .panel h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .notifications-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .notification-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .notification-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .notification-item {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .notification-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .notification-title {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .notification-time {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        .notification-body p {
+            margin: 8px 0;
+            color: #34495e;
+        }
+
+        .notification-meta {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+            font-size: 0.85em;
+        }
+
+        .notification-type {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 12px;
+            color: #1976d2;
+        }
+
+        .notification-status {
+            background: #e8f5e9;
+            padding: 2px 8px;
+            border-radius: 12px;
+            color: #388e3c;
+        }
+
+        .notification-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-connected {
+            background: #27ae60;
+        }
+
+        .status-disconnected {
+            background: #e74c3c;
+        }
+
+        .socket-status {
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .socket-connected {
+            background: rgba(39, 174, 96, 0.1);
+            color: #27ae60;
+        }
+
+        .socket-disconnected {
+            background: rgba(231, 76, 60, 0.1);
+            color: #e74c3c;
+        }
+
+        .stats {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        .log-entry {
+            padding: 8px 12px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .log-success {
+            border-left: 3px solid #27ae60;
+        }
+
+        .log-error {
+            border-left: 3px solid #e74c3c;
+        }
+
+        .log-info {
+            border-left: 3px solid #3498db;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔔 Notification Workflow Test Panel</h1>
+            <p class="subtitle">Complete Registration → KYC → Withdrawal Notification Flow</p>
+            <div id="serverWarning" class="warning">
+                ⚠️ Loading from incorrect server. Please access via: <strong>http://localhost:5001/notification-workflow.html</strong>
+            </div>
+            <div id="serverSuccess" class="success" style="display: none;">
+                ✅ Connected to backend server. Socket.IO and all APIs available.
+            </div>
+            <div id="tokenDisplay" style="color: #2980b9; font-weight: bold; margin-top: 10px; padding: 10px; background: rgba(52, 152, 219, 0.1); border-radius: 8px; display: none;">
+                <strong>Generated OTP:</strong> <span id="generatedOtp">N/A</span> | 
+                <strong>Latest Tokens:</strong> Female: <span id="latestFemaleToken">N/A</span>, Agency: <span id="latestAgencyToken">N/A</span>, Admin: <span id="latestAdminToken">N/A</span>
+            </div>
+            <div id="socketStatus" class="socket-status socket-disconnected">
+                <span class="status-indicator status-disconnected"></span>
+                Socket Disconnected
+            </div>
+        </div>
+
+        <!-- Authentication Section -->
+        <div class="auth-section">
+            <h2>🔐 Authentication Tokens</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="femaleToken">♀️ Female User Token:</label>
+                    <input type="password" id="femaleToken" placeholder="Enter female user token">
+                </div>
+                <div class="form-group">
+                    <label for="agencyToken">🏢 Agency User Token:</label>
+                    <input type="password" id="agencyToken" placeholder="Enter agency user token">
+                </div>
+                <div class="form-group">
+                    <label for="adminToken">👮 Admin Token:</label>
+                    <input type="password" id="adminToken" placeholder="Enter admin token">
+                </div>
+            </div>
+        </div>
+
+        <!-- Workflow Steps -->
+        <div class="workflow-container">
+            <div class="panel">
+                <h2>♀️ User Registration & KYC Flow</h2>
+                
+                <div class="form-group">
+                    <label>Registration:</label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Email:</label>
+                            <input type="email" id="regEmail" placeholder="Enter email">
+                        </div>
+                        <div class="form-group">
+                            <label>Mobile Number:</label>
+                            <input type="tel" id="regMobile" placeholder="Enter mobile number">
+                        </div>
+                        <div class="form-group">
+                            <label>Referral Code (Optional):</label>
+                            <input type="text" id="regReferral" placeholder="Enter referral code">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <button class="btn btn-primary" onclick="registerUser('female')">Register Female User</button>
+                        <button class="btn btn-primary" onclick="registerUser('agency')">Register Agency User</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>OTP Verification:</label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>OTP:</label>
+                            <input type="text" id="verifyOtp" placeholder="Enter OTP">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <button class="btn btn-warning" onclick="verifySignupOtp()">Verify Signup OTP</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>KYC Submission:</label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>KYC Method:</label>
+                            <select id="kycMethod">
+                                <option value="account_details">Bank Details</option>
+                                <option value="upi_id">UPI ID</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <button class="btn btn-primary" onclick="submitKYC('female')">Submit Female KYC</button>
+                        <button class="btn btn-primary" onclick="submitKYC('agency')">Submit Agency KYC</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Withdrawal Request:</label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Amount (Rupees):</label>
+                            <input type="number" id="withdrawalAmount" placeholder="Enter amount" value="500">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <button class="btn btn-success" onclick="requestWithdrawal('female')">Request Female Withdrawal</button>
+                        <button class="btn btn-success" onclick="requestWithdrawal('agency')">Request Agency Withdrawal</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>👮 Admin Approval Actions</h2>
+                
+                <div class="form-group">
+                    <label>Registration Approval:</label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>User ID:</label>
+                            <input type="text" id="regUserId" placeholder="Enter User ID to approve">
+                        </div>
+                        <div class="form-group">
+                            <label>User Type:</label>
+                            <select id="regUserType">
+                                <option value="female">Female</option>
+                                <option value="agency">Agency</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <button class="btn btn-success" onclick="approveRegistration('accept')">Approve Registration</button>
+                        <button class="btn btn-danger" onclick="approveRegistration('reject')">Reject Registration</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>KYC Processing:</label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>KYC ID:</label>
+                            <input type="text" id="kycId" placeholder="Enter KYC ID">
+                        </div>
+                        <div class="form-group">
+                            <label>KYC Type:</label>
+                            <select id="kycUserType">
+                                <option value="female">Female</option>
+                                <option value="agency">Agency</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <button class="btn btn-success" onclick="processKYC('approve')">Approve KYC</button>
+                        <button class="btn btn-danger" onclick="processKYC('reject')">Reject KYC</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Withdrawal Processing:</label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Withdrawal ID:</label>
+                            <input type="text" id="withdrawalId" placeholder="Enter Withdrawal ID">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <button class="btn btn-success" onclick="processWithdrawal('approve')">Approve Withdrawal</button>
+                        <button class="btn btn-danger" onclick="processWithdrawal('reject')">Reject Withdrawal</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Notification Permission:</label>
+                    <div class="form-row">
+                        <button class="btn btn-warning" onclick="requestNotificationPermission()">Allow Notifications</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notifications Display -->
+        <div class="notifications-container">
+            <div class="notification-section">
+                <h3>♀️ User Notifications</h3>
+                <div id="userNotifications"></div>
+                <div class="form-row" style="margin-top: 15px;">
+                    <button class="btn" onclick="getUserNotifications()">Load User Notifications</button>
+                    <button class="btn" onclick="markAllAsRead()">Mark All User Read</button>
+                </div>
+            </div>
+
+            <div class="notification-section">
+                <h3>👮 Admin Notifications</h3>
+                <div id="adminNotifications"></div>
+                <div class="form-row" style="margin-top: 15px;">
+                    <button class="btn" onclick="getAdminNotifications()">Load Admin Notifications</button>
+                    <button class="btn" onclick="markAdminAllAsRead()">Mark All Admin Read</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats and Logs -->
+        <div class="stats">
+            <h3>📊 Statistics</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="apiCallCount">0</div>
+                    <div class="stat-label">API Calls</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="socketEventCount">0</div>
+                    <div class="stat-label">Socket Events</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="notificationCount">0</div>
+                    <div class="stat-label">Notifications</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="unreadCount">0</div>
+                    <div class="stat-label">Unread</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="notification-section">
+            <h3>📋 Event Logs</h3>
+            <div id="eventLogs"></div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let socket = null;
+        let userNotifications = [];
+        let adminNotifications = [];
+        let apiCallCount = 0;
+        let socketEventCount = 0;
+        let notificationCount = 0;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if we're on the correct server
+            const isOnBackendServer = window.location.port === '5001' || 
+                (window.location.hostname === 'localhost' && window.location.port === '');
+            
+            if (isOnBackendServer) {
+                document.getElementById('serverWarning').style.display = 'none';
+                document.getElementById('serverSuccess').style.display = 'block';
+            } else {
+                document.getElementById('serverWarning').innerHTML = `⚠️ Loading from incorrect server. Please access via: <strong>${window.location.protocol}//localhost:5001/notification-workflow.html</strong>`;
+            }
+            
+            initializeSocket();
+            updateStats();
+        });
+
+        // Socket Connection
+        function initializeSocket() {
+            // Check if socket.io is available before initializing
+            if (typeof io === 'undefined') {
+                console.warn('Socket.IO client library not available. Please load this page from the backend server (port 5001).');
+                updateSocketStatus(false);
+                return;
+            }
+
+            // Get the current server URL dynamically
+            const protocol = window.location.protocol;
+            const host = window.location.host;
+            const baseUrl = `${protocol}//${host}`;
+            
+            socket = io(baseUrl, {
+                transports: ['websocket'],
+                autoConnect: false
+            });
+
+            socket.on('connect', function() {
+                console.log('Socket connected to:', baseUrl);
+                updateSocketStatus(true);
+                
+                // Get admin token and send with room join
+                const adminToken = document.getElementById('adminToken')?.value;
+                if (adminToken) {
+                    socket.emit('join_admin_room', { token: adminToken });
+                } else {
+                    socket.emit('join_admin_room');
+                }
+            });
+
+            socket.on('disconnect', function() {
+                console.log('Socket disconnected');
+                updateSocketStatus(false);
+            });
+
+            // Listen for admin notifications
+            socket.on('admin:notification', function(data) {
+                socketEventCount++;
+                logSocketEvent('ADMIN NOTIFICATION', data);
+                addNotificationToDisplay(data, 'admin');
+            });
+
+            // Listen for general notifications
+            socket.on('notification:received', function(data) {
+                socketEventCount++;
+                logSocketEvent('USER NOTIFICATION', data);
+                addNotificationToDisplay(data, 'user');
+            });
+
+            // Attempt to connect
+            socket.open();
+        }
+
+        // Update socket status display
+        function updateSocketStatus(connected) {
+            const statusDiv = document.getElementById('socketStatus');
+            const indicator = statusDiv.querySelector('.status-indicator');
+            
+            if (connected) {
+                statusDiv.className = 'socket-status socket-connected';
+                statusDiv.innerHTML = '<span class="status-indicator status-connected"></span> Socket Connected';
+            } else {
+                statusDiv.className = 'socket-status socket-disconnected';
+                statusDiv.innerHTML = '<span class="status-indicator status-disconnected"></span> Socket Disconnected';
+            }
+            
+            updateStats();
+        }
+
+        // Get tokens from inputs
+        function getTokens() {
+            return {
+                female: document.getElementById('femaleToken').value,
+                agency: document.getElementById('agencyToken').value,
+                admin: document.getElementById('adminToken').value
+            };
+        }
+
+        // API Helper Functions
+        async function makeAPICall(url, method = 'GET', data = null, token = null) {
+            apiCallCount++;
+            updateStats();
+
+            // Check if we're on the correct server
+            const isOnBackendServer = window.location.port === '5001' || 
+                (window.location.hostname === 'localhost' && window.location.port === '');
+            
+            if (!isOnBackendServer) {
+                console.warn('API calls may fail - not loaded from backend server. Expected: port 5001');
+            }
+
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+
+            if (token) {
+                options.headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+
+            try {
+                const startTime = Date.now();
+                const response = await fetch(url, options);
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+
+                // Try to parse JSON response, but handle HTML errors gracefully
+                let responseData;
+                const contentType = response.headers.get('content-type');
+                
+                if (contentType && contentType.includes('application/json')) {
+                    responseData = await response.json();
+                } else {
+                    // If not JSON, try to parse as text and create a helpful error
+                    const text = await response.text();
+                    if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+                        // This is an HTML error page
+                        responseData = { 
+                            error: 'HTML Error Page Returned', 
+                            message: `Server returned HTML instead of JSON. Status: ${response.status}`,
+                            htmlPreview: text.substring(0, 200) + '...'
+                        };
+                    } else {
+                        responseData = { error: 'Non-JSON Response', message: text };
+                    }
+                }
+
+                logApiResponse(url, method, data, responseData, duration);
+
+                // Extract and display OTP if present in response
+                if (responseData.otp) {
+                    document.getElementById('generatedOtp').textContent = responseData.otp;
+                    document.getElementById('tokenDisplay').style.display = 'block';
+                }
+                
+                // Extract and display tokens if present in response
+                if (responseData.token) {
+                    // Determine which token type based on the endpoint
+                    if (url.includes('/female-user/') && (url.includes('/register') || url.includes('/login') || url.includes('/verify-otp'))) {
+                        document.getElementById('latestFemaleToken').textContent = responseData.token.substring(0, 10) + '...';
+                    } else if (url.includes('/agency/') && (url.includes('/register') || url.includes('/login') || url.includes('/verify-otp'))) {
+                        document.getElementById('latestAgencyToken').textContent = responseData.token.substring(0, 10) + '...';
+                    } else if (url.includes('/admin/')) {
+                        document.getElementById('latestAdminToken').textContent = responseData.token.substring(0, 10) + '...';
+                    }
+                    document.getElementById('tokenDisplay').style.display = 'block';
+                }
+                
+                // Check for specific notification validation errors
+                if (responseData.error && typeof responseData.error === 'string' && 
+                    (responseData.error.includes('receiverModel') || responseData.error.includes('receiverId'))) {
+                    console.error('Notification validation error detected. This is a backend issue where required fields are missing.');
+                    showMessage('Backend notification validation error. Check server logs for "receiverModel"/"receiverId" validation issues.', 'error');
+                }
+
+                return {
+                    success: response.ok,
+                    data: responseData,
+                    status: response.status
+                };
+            } catch (error) {
+                console.error('API call failed:', error);
+                logApiResponse(url, method, data, { error: error.message }, 0);
+                
+                // Handle the specific notification validation error
+                if (error.message.includes('receiverModel') || error.message.includes('receiverId')) {
+                    showMessage('Backend notification validation error. Required fields missing in notification system.', 'error');
+                }
+                
+                return {
+                    success: false,
+                    data: { error: error.message },
+                    status: 500
+                };
+            }
+        }
+
+        // Log API response
+        function logApiResponse(url, method, data, response, duration) {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${response.success ? 'log-success' : 'log-error'}`;
+            logEntry.innerHTML = `<strong>${method} ${url}</strong> (${duration}ms)<br><small>Response: ${JSON.stringify(response).substring(0, 200)}...</small>`;
+            
+            const logsContainer = document.getElementById('eventLogs');
+            logsContainer.insertBefore(logEntry, logsContainer.firstChild);
+            
+            // Limit logs to 50 entries
+            if (logsContainer.children.length > 50) {
+                logsContainer.removeChild(logsContainer.lastChild);
+            }
+        }
+
+        // Log socket events
+        function logSocketEvent(event, data) {
+            socketEventCount++;
+            updateStats();
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry log-info';
+            logEntry.innerHTML = `<strong>.Socket ${event}</strong><br><small>Data: ${JSON.stringify(data).substring(0, 200)}...</small>`;
+            
+            const logsContainer = document.getElementById('eventLogs');
+            logsContainer.insertBefore(logEntry, logsContainer.firstChild);
+            
+            // Limit logs to 50 entries
+            if (logsContainer.children.length > 50) {
+                logsContainer.removeChild(logsContainer.lastChild);
+            }
+        }
+
+        // Show message
+        function showMessage(message, type = 'info') {
+            // Create a temporary alert element
+            const alertDiv = document.createElement('div');
+            alertDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 20px;
+                border-radius: 8px;
+                color: white;
+                font-weight: bold;
+                z-index: 1000;
+                ${type === 'success' ? 'background: #27ae60;' : 
+                  type === 'error' ? 'background: #e74c3c;' : 'background: #3498db;'}
+            `;
+            alertDiv.textContent = message;
+            
+            document.body.appendChild(alertDiv);
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.parentNode.removeChild(alertDiv);
+                }
+            }, 5000);
+        }
+
+        // Update statistics
+        function updateStats() {
+            document.getElementById('apiCallCount').textContent = apiCallCount;
+            document.getElementById('socketEventCount').textContent = socketEventCount;
+            document.getElementById('notificationCount').textContent = notificationCount;
+            
+            // Calculate unread count
+            const unread = [...userNotifications, ...adminNotifications].filter(n => !n.isRead).length;
+            document.getElementById('unreadCount').textContent = unread;
+        }
+
+        // Registration Functions
+        async function registerUser(userType) {
+            const email = document.getElementById('regEmail').value;
+            const mobileNumber = document.getElementById('regMobile').value;
+            const referralCode = document.getElementById('regReferral').value;
+
+            if (!email || !mobileNumber) {
+                alert('Please enter both email and mobile number!');
+                return;
+            }
+
+            const regData = {
+                email: email,
+                mobileNumber: mobileNumber
+            };
+
+            // Add referral code if provided
+            if (referralCode) {
+                regData.referralCode = referralCode;
+            }
+
+            // Use correct endpoint for each user type
+            const endpoint = userType === 'female' ? '/female-user/register' : '/agency/register';
+
+            const response = await makeAPICall(
+                endpoint,  // Fixed: Correct API endpoint for agency
+                'POST',
+                regData,
+                null  // No auth token needed for registration
+            );
+
+            if (response.success) {
+                showMessage(`${userType.charAt(0).toUpperCase() + userType.slice(1)} user registered successfully!`, 'success');
+            } else {
+                showMessage(`${userType} registration failed: ${response.data.error || response.data.message}`, 'error');
+            }
+        }
+
+        // OTP Verification Function
+        async function verifySignupOtp() {
+            const otp = document.getElementById('verifyOtp').value;
+
+            if (!otp) {
+                alert('Please enter OTP!');
+                return;
+            }
+
+            // Check if female or agency token is available to determine which endpoint to use
+            const tokens = getTokens();
+            let endpoint = '/female-user/verify-otp';
+            
+            // If agency token exists but female doesn't, use agency endpoint
+            if (!tokens.female && tokens.agency) {
+                endpoint = '/agency/verify-otp';
+            }
+
+            const response = await makeAPICall(
+                endpoint,  // Use appropriate endpoint
+                'POST',
+                { otp: parseInt(otp) },
+                null  // No auth token needed for OTP verification
+            );
+
+            if (response.success) {
+                showMessage('OTP verified successfully!', 'success');
+            } else {
+                showMessage(`OTP verification failed: ${response.data.error || response.data.message}`, 'error');
+            }
+        }
+
+        // KYC Functions
+        async function submitKYC(userType) {
+            const tokens = getTokens();
+            const token = tokens[userType];
+            
+            if (!token) {
+                alert(`Please enter ${userType} token first!`);
+                return;
+            }
+
+            const kycMethod = document.getElementById('kycMethod').value;
+
+            let kycData;
+            if (kycMethod === 'account_details') {
+                kycData = {
+                    method: 'account_details',
+                    accountDetails: {
+                        name: `${userType.charAt(0).toUpperCase() + userType.slice(1)} Test User`,
+                        accountNumber: '1234567890',
+                        ifsc: 'TEST0001234'
+                    }
+                };
+            } else {
+                kycData = {
+                    method: 'upi_id',
+                    upiId: 'test@upi'
+                };
+            }
+
+            // For female users, KYC is under female-user route; for agency, it's under agency route
+            const kycEndpoint = userType === 'female' ? '/female-user/submit-kyc' : '/agency/kyc/submit-kyc';
+
+            const response = await makeAPICall(
+                kycEndpoint,  // Correct API endpoint from specs
+                'POST',
+                kycData,
+                token
+            );
+
+            if (response.success) {
+                showMessage('KYC submitted successfully!', 'success');
+            } else {
+                showMessage(`KYC submission failed: ${response.data.error || response.data.message}`, 'error');
+            }
+        }
+
+        async function processKYC(action) {
+            const tokens = getTokens();
+            const adminToken = tokens.admin;
+            const kycId = document.getElementById('kycId').value;
+            const userType = document.getElementById('kycUserType').value;
+
+            if (!adminToken) {
+                alert('Please enter admin token first!');
+                return;
+            }
+
+            if (!kycId) {
+                alert('Please enter KYC ID!');
+                return;
+            }
+
+            const kycData = {
+                kycId: kycId,
+                status: action === 'approve' ? 'approved' : 'rejected',  // From specs: approved, rejected
+                kycType: userType  // From specs: female, agency
+            };
+
+            const response = await makeAPICall(
+                '/admin/users/review-kyc',  // Correct API endpoint from specs
+                'POST',
+                kycData,
+                adminToken
+            );
+
+            if (response.success) {
+                showMessage(`KYC ${action}ed successfully!`, 'success');
+            } else {
+                showMessage(`KYC ${action} failed: ${response.data.error || response.data.message}`, 'error');
+            }
+        }
+
+        // Withdrawal Functions
+        async function requestWithdrawal(userType) {
+            const tokens = getTokens();
+            const token = tokens[userType];
+            const amount = document.getElementById('withdrawalAmount').value;
+
+            if (!token) {
+                alert(`Please enter ${userType} token first!`);
+                return;
+            }
+
+            const withdrawalData = {
+                rupees: parseFloat(amount),  // From specs: rupees
+                payoutMethod: 'bank',        // From specs: bank, upi
+                payoutMethodId: '697d99636c86ef4177de16a0'  // From specs: payoutMethodId
+            };
+
+            // Different endpoints for female vs agency - according to specs
+            const withdrawalEndpoint = userType === 'female' ? '/female-user/withdrawals' : '/agency/withdrawals';
+
+            const response = await makeAPICall(
+                withdrawalEndpoint,  // Correct API endpoint from specs
+                'POST',
+                withdrawalData,
+                token
+            );
+
+            if (response.success) {
+                showMessage('Withdrawal requested successfully!', 'success');
+            } else {
+                showMessage(`Withdrawal request failed: ${response.data.error || response.data.message}`, 'error');
+            }
+        }
+
+        async function processWithdrawal(action) {
+            const tokens = getTokens();
+            const adminToken = tokens.admin;
+            const withdrawalId = document.getElementById('withdrawalId').value;
+
+            if (!adminToken) {
+                alert('Please enter admin token first!');
+                return;
+            }
+
+            if (!withdrawalId) {
+                alert('Please enter Withdrawal ID!');
+                return;
+            }
+
+            // Use the correct payout endpoint format from specs
+            const response = await makeAPICall(
+                `/admin/payouts/${withdrawalId}/${action}`,  // Correct API endpoint from specs
+                'POST',
+                {},
+                adminToken
+            );
+
+            if (response.success) {
+                showMessage(`Withdrawal ${action}ed successfully!`, 'success');
+            } else {
+                showMessage(`Withdrawal ${action} failed: ${response.data.error || response.data.message}`, 'error');
+            }
+        }
+
+        // Registration approval function
+        async function approveRegistration(action) {
+            const tokens = getTokens();
+            const adminToken = tokens.admin;
+            const userId = document.getElementById('regUserId').value;
+            const userType = document.getElementById('regUserType').value;
+
+            if (!adminToken || !userId) {
+                alert('Please enter admin token and user ID!');
+                return;
+            }
+
+            const approvalData = {
+                userType: userType,
+                userId: userId,
+                reviewStatus: action === 'accept' ? 'accepted' : 'rejected'  // From specs: accepted, rejected
+            };
+
+            const response = await makeAPICall(
+                '/admin/users/review-registration',  // Correct API endpoint from specs
+                'POST',
+                approvalData,
+                adminToken
+            );
+
+            if (response.success) {
+                showMessage(`Registration ${action}ed successfully!`, 'success');
+            } else {
+                showMessage(`Registration ${action} failed: ${response.data.error || response.data.message}`, 'error');
+            }
+        }
+
+        // Notification Permission Request
+        async function requestNotificationPermission() {
+            if (!('Notification' in window)) {
+                showMessage('This browser does not support notifications', 'error');
+                return false;
+            }
+
+            if (Notification.permission === 'granted') {
+                showMessage('Notification permission already granted', 'success');
+                return true;
+            }
+
+            if (Notification.permission !== 'denied') {
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    showMessage('Notification permission granted', 'success');
+                    return true;
+                } else {
+                    showMessage('Notification permission denied', 'error');
+                    return false;
+                }
+            } else {
+                showMessage('Notification permission was denied by user', 'error');
+                return false;
+            }
+        }
+
+        // Add notification to display
+        function addNotificationToDisplay(notification, type = 'user') {
+            const container = type === 'admin' ? document.getElementById('adminNotifications') : document.getElementById('userNotifications');
+            
+            const div = document.createElement('div');
+            div.className = 'notification-item';
+            // Use _id instead of id
+            div.innerHTML = `
+                <div class="notification-header">
+                    <span class="notification-title">${notification.title || 'No Title'}</span>
+                    <span class="notification-time">${new Date(notification.createdAt).toLocaleString()}</span>
+                </div>
+                <div class="notification-body">
+                    <p>${notification.message || 'No Message'}</p>
+                    <div class="notification-meta">
+                        <span class="notification-type">${notification.type || 'general'}</span>
+                        <span class="notification-status">${notification.isRead ? 'Read' : 'Unread'}</span>
+                    </div>
+                </div>
+                <div class="notification-actions">
+                    <button class="btn btn-sm btn-primary" onclick="showNotificationDetails('${notification._id}')">Details</button>
+                    <button class="btn btn-sm btn-secondary" onclick="markAsRead('${notification._id}', '${type}')">Mark Read</button>
+                </div>
+            `;
+            
+            container.insertBefore(div, container.firstChild);
+            notificationCount++;
+            updateStats();
+        }
+
+        // Show notification details
+        function showNotificationDetails(notificationId) {
+            const notifications = [...userNotifications, ...adminNotifications];
+            // Look for notification by _id
+            const notification = notifications.find(n => n._id === notificationId);
+            
+            if (notification) {
+                alert(JSON.stringify(notification, null, 2));
+            } else {
+                showMessage('Notification not found', 'error');
+            }
+        }
+
+        // Mark notification as read
+        async function markAsRead(notificationId, type = 'user') {
+            const tokens = getTokens();
+            let token;
+            
+            if (type === 'admin') {
+                token = tokens.admin;
+            } else {
+                // Use female token by default, fall back to agency
+                token = tokens.female || tokens.agency;
+            }
+            
+            if (!token) {
+                alert(`Please enter ${type === 'admin' ? 'admin' : 'user'} token first!`);
+                return;
+            }
+
+            const response = await makeAPICall(
+                `/notification-panel/notifications/${notificationId}/read`,  // Use _id
+                'PUT',
+                {},
+                token
+            );
+
+            if (response.success) {
+                showMessage('Notification marked as read successfully!', 'success');
+                updateStats();
+            } else {
+                showMessage(`Mark read failed: ${response.data.error || response.data.message}`, 'error');
+            }
+        }
+
+        // Fetch user notifications
+        async function getUserNotifications() {
+            const tokens = getTokens();
+            const token = tokens.female || tokens.agency;
+
+            if (!token) {
+                alert('Please enter female or agency token first!');
+                return;
+            }
+
+            const response = await makeAPICall(
+                '/notification-panel/notifications',
+                'GET',
+                null,
+                token
+            );
+
+            if (response.success) {
+                // Handle different possible response structures
+                const notificationsData = response.data.notifications || response.data.data || response.data || [];
+                userNotifications = Array.isArray(notificationsData) ? notificationsData : [];
+                
+                // Clear current display
+                document.getElementById('userNotifications').innerHTML = '';
+                
+                // Add each notification to display
+                userNotifications.forEach(notification => {
+                    addNotificationToDisplay(notification, 'user');
+                });
+                
+                showMessage(`Loaded ${userNotifications.length} user notifications`, 'success');
+            } else {
+                showMessage(`Failed to load user notifications: ${response.data.error || response.data.message}`, 'error');
+            }
+        }
+
+        // Fetch admin notifications
+        async function getAdminNotifications() {
+            const tokens = getTokens();
+            const token = tokens.admin;
+
+            if (!token) {
+                alert('Please enter admin token first!');
+                return;
+            }
+
+            const response = await makeAPICall(
+                '/notification-panel/notifications',
+                'GET',
+                null,
+                token
+            );
+
+            if (response.success) {
+                // Handle different possible response structures
+                const notificationsData = response.data.notifications || response.data.data || response.data || [];
+                adminNotifications = Array.isArray(notificationsData) ? notificationsData : [];
+                
+                // Clear current display
+                document.getElementById('adminNotifications').innerHTML = '';
+                
+                // Add each notification to display
+                adminNotifications.forEach(notification => {
+                    addNotificationToDisplay(notification, 'admin');
+                });
+                
+                showMessage(`Loaded ${adminNotifications.length} admin notifications`, 'success');
+            } else {
+                showMessage(`Failed to load admin notifications: ${response.data.error || response.data.message}`, 'error');
+            }
+        }
+
+        // Mark all user notifications as read
+        async function markAllAsRead() {
+            const tokens = getTokens();
+            const token = tokens.female || tokens.agency;
+
+            if (!token) {
+                alert('Please enter female or agency token first!');
+                return;
+            }
+
+            const response = await makeAPICall(
+                '/notification-panel/notifications/read-all',  // Fixed API endpoint
+                'PUT',
+                {},
+                token
+            );
+
+            if (response.success) {
+                showMessage('All user notifications marked as read!', 'success');
+                updateStats();
+            } else {
+                showMessage(`Failed to mark all as read: ${response.data.error || response.data.message}`, 'error');
+            }
+        }
+
+        // Mark all admin notifications as read
+        async function markAdminAllAsRead() {
+            const tokens = getTokens();
+            const token = tokens.admin;
+
+            if (!token) {
+                alert('Please enter admin token first!');
+                return;
+            }
+
+            const response = await makeAPICall(
+                '/notification-panel/notifications/read-all',  // Fixed API endpoint
+                'PUT',
+                {},
+                token
+            );
+
+            if (response.success) {
+                showMessage('All admin notifications marked as read!', 'success');
+                updateStats();
+            } else {
+                showMessage(`Failed to mark all as read: ${response.data.error || response.data.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
