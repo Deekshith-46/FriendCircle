@@ -8,6 +8,7 @@ const maleUserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   bio: { type: String },
   dateOfBirth: { type: Date },
+  age : {type : Number},
   gender: { type: String, enum: ['male', 'female', 'other'] },
   interests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Interest' }],
   languages: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Language' }],
@@ -56,6 +57,14 @@ const maleUserSchema = new mongoose.Schema({
   // Referral system
   referralCode: { type: String, unique: true, sparse: true }, // 8-char alphanumeric
   referredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'MaleUser' }], 
+  
+  // Push Notification FCM Tokens (support multiple devices)
+  fcmTokens: [{
+    token: { type: String, required: true },
+    deviceId: { type: String }, // Optional device identifier
+    platform: { type: String, enum: ['ios', 'android', 'web'] },
+    createdAt: { type: Date, default: Date.now }
+  }],
 }, { timestamps: true });
 
 module.exports = mongoose.model('MaleUser', maleUserSchema);

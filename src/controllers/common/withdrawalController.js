@@ -504,14 +504,46 @@ exports.getAvailablePayoutMethods = async (req, res) => {
       return res.status(404).json({ success: false, message: messages.COMMON.USER_NOT_FOUND });
     }
     
+    // Get admin config for conversion rate
+    const adminConfig = await AdminConfig.getConfig();
+    
+    // Validate required financial settings are configured
+    if (adminConfig.coinToRupeeConversionRate === undefined || adminConfig.coinToRupeeConversionRate === null) {
+      return res.status(400).json({
+        success: false,
+        message: 'Coin to rupee conversion rate not configured by admin'
+      });
+    }
+    
+    const coinToRupeeRate = adminConfig.coinToRupeeConversionRate;
+    
+    const walletBalance = user.walletBalance || 0;
+    
+    // If 5 coins = 1 rupee, then conversion rate is 1/5 = 0.2
+    const conversionRate = coinToRupeeRate ? (1 / coinToRupeeRate) : 0.2;
+    
+    const walletBalanceInRupees = Number((walletBalance * conversionRate).toFixed(2));
+    
     const response = {
       success: true,
-      data: {}
+      data: {
+        // Wallet balance information
+        walletBalance: {
+          coins: walletBalance,
+          rupees: walletBalanceInRupees
+        },
+        conversionRate: {
+          coinsPerRupee: coinToRupeeRate,
+          rupeesPerCoin: conversionRate
+        },
+        // Payout methods
+        payoutMethods: {}
+      }
     };
     
     // Check for bank details in KYC
     if (user.kycDetails && user.kycDetails.bank) {
-      response.data.bank = {
+      response.data.payoutMethods.bank = {
         id: user.kycDetails.bank._id,
         accountNumber: user.kycDetails.bank.accountNumber,
         ifsc: user.kycDetails.bank.ifsc,
@@ -521,7 +553,7 @@ exports.getAvailablePayoutMethods = async (req, res) => {
     
     // Check for UPI details in KYC
     if (user.kycDetails && user.kycDetails.upi) {
-      response.data.upi = {
+      response.data.payoutMethods.upi = {
         id: user.kycDetails.upi._id,
         upiId: user.kycDetails.upi.upiId,
         status: user.kycDetails.upi.status

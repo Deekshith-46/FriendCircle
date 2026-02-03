@@ -1,5 +1,6 @@
 // Notification Service - Modular Implementation with Clean Architecture
 const notificationService = require('./notification');
+const { saveFCMToken, removeFCMToken } = require('./notification/fcmManager');
 
 // Export all functions from modular notification service
 module.exports = {
@@ -18,6 +19,13 @@ module.exports = {
   
   // Direct notifications with delivery intent
   sendNotificationWithIntent: notificationService.sendNotificationWithIntent,
+  
+  // FCM Token Management
+  saveFCMToken,
+  removeFCMToken,
+  
+  // Push Notification Functions
+  sendPushNotification: require('./notification/pushSender').sendPushNotification,
   
   // Notification management
   getUserNotifications: notificationService.getUserNotifications,

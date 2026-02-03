@@ -46,22 +46,22 @@ router.post('/test', auth, async (req, res) => {
     }
   };
 
-  // Import and use sendPushNotification
-  const { sendPushNotification } = require('../../services/notificationService');
-  const results = await sendPushNotification(targetUserId, targetType, payload);
+  // Import and use sendNotificationWithIntent
+  const { sendNotificationWithIntent } = require('../../services/notificationService');
+  const results = await sendNotificationWithIntent(targetUserId, targetType, title, body, payload);
 
-  const successful = results.filter(r => r.success).length;
+  const successful = results.push ? results.push.filter(r => r.success).length : 0;
   
-  if (successful > 0) {
+  if (results.db !== false) {
     return res.json({
       success: true,
-      message: `Test notification sent successfully to ${successful}/${results.length} devices`,
+      message: `Test notification sent successfully`,
       data: { results }
     });
   } else {
     return res.status(500).json({
       success: false,
-      message: 'Failed to send test notification to any devices'
+      message: 'Failed to send test notification'
     });
   }
 });

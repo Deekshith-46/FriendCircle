@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Notification Test Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <script src="/socket.io/socket.io.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      padding: 20px;
+      max-width: 1100px;
+      margin: auto;
+    }
+    h2 { margin-top: 0; }
+    .box {
+      background: #fff;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+    }
+    input {
+      padding: 8px;
+      width: 320px;
+      margin-right: 10px;
+    }
+    button {
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    .notification {
+      border: 1px solid #ddd;
+      background: #fafafa;
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .unread { border-left: 4px solid #007bff; }
+    .meta {
+      font-size: 12px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>🔔 Notification Test Panel</h2>
+
+  <!-- TOKENS -->
+  <div class="box">
+    <h3>Tokens</h3>
+    <input id="userToken" placeholder="Female / Agency Token" />
+    <input id="adminToken" placeholder="Admin Token" />
+    <button onclick="saveTokens()">Save & Connect</button>
+  </div>
+
+  <!-- STATS -->
+  <div class="box">
+    <strong>Total:</strong> <span id="totalCount">0</span> |
+    <strong>Unread:</strong> <span id="unreadCount">0</span>
+  </div>
+
+  <!-- USER -->
+  <div class="box">
+    <h3>User Notifications</h3>
+    <button onclick="loadUser()">Refresh</button>
+    <button onclick="markAll('user')">Mark All Read</button>
+    <div id="userList"></div>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="box">
+    <h3>Admin Notifications</h3>
+    <button onclick="loadAdmin()">Refresh</button>
+    <button onclick="markAll('admin')">Mark All Read</button>
+    <div id="adminList"></div>
+  </div>
+
+<script>
+/* ---------------- GLOBAL STATE ---------------- */
+let socket;
+let userNotifications = [];
+let adminNotifications = [];
+
+/* ---------------- INIT ---------------- */
+window.onload = () => {
+  userToken.value = localStorage.getItem('userToken') || '';
+  adminToken.value = localStorage.getItem('adminToken') || '';
+  connectSocket();
+};
+
+/* ---------------- TOKENS ---------------- */
+function saveTokens() {
+  localStorage.setItem('userToken', userToken.value);
+  localStorage.setItem('adminToken', adminToken.value);
+  connectSocket();
+}
+
+/* ---------------- SOCKET ---------------- */
+function connectSocket() {
+  if (socket) socket.disconnect();
+
+  socket = io();
+
+  socket.on('connect', () => {
+    console.log('Socket connected');
+
+    const u = localStorage.getItem('userToken');
+    const a = localStorage.getItem('adminToken');
+
+    if (u) socket.emit('join_user_room', { token: u });
+    if (a) socket.emit('join_admin_room', { token: a });
+  });
+
+  socket.on('notification:received', n => {
+    normalize(n);
+    userNotifications.unshift(n);
+    render();
+  });
+
+  socket.on('admin:notification', n => {
+    normalize(n);
+    adminNotifications.unshift(n);
+    render();
+  });
+}
+
+/* ---------------- API ---------------- */
+async function api(url, method = 'GET', token) {
+  const res = await fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return res.json();
+}
+
+async function loadUser() {
+  const token = localStorage.getItem('userToken');
+  if (!token) return alert('User token missing');
+
+  const res = await api('/notification-panel/notifications', 'GET', token);
+  userNotifications = Array.isArray(res.data) ? res.data : [];
+  render();
+}
+
+async function loadAdmin() {
+  const token = localStorage.getItem('adminToken');
+  if (!token) return alert('Admin token missing');
+
+  const res = await api('/notification-panel/notifications', 'GET', token);
+  adminNotifications = Array.isArray(res.data) ? res.data : [];
+  render();
+}
+
+async function markAll(type) {
+  const token = localStorage.getItem(type === 'user' ? 'userToken' : 'adminToken');
+  if (!token) return;
+
+  await api('/notification-panel/notifications/read-all', 'PUT', token);
+
+  (type === 'user' ? userNotifications : adminNotifications)
+    .forEach(n => n.isRead = true);
+
+  render();
+}
+
+/* ---------------- HELPERS ---------------- */
+function normalize(n) {
+  if (!n._id) n._id = 'socket-' + Date.now();
+  if (!n.createdAt) n.createdAt = new Date().toISOString();
+  if (typeof n.isRead !== 'boolean') n.isRead = false;
+}
+
+function render() {
+  renderList(userList, userNotifications);
+  renderList(adminList, adminNotifications);
+
+  const all = [...userNotifications, ...adminNotifications];
+  totalCount.textContent = all.length;
+  unreadCount.textContent = all.filter(n => !n.isRead).length;
+}
+
+function renderList(container, list) {
+  container.innerHTML = '';
+  list.forEach(n => {
+    const div = document.createElement('div');
+    div.className = 'notification ' + (!n.isRead ? 'unread' : '');
+    div.innerHTML = `
+      <strong>${n.title || 'No title'}</strong><br>
+      ${n.message || ''}<br>
+      <div class="meta">${new Date(n.createdAt).toLocaleString()}</div>
+    `;
+    container.appendChild(div);
+  });
+}
+</script>
+
+</body>
+</html>

@@ -39,7 +39,15 @@ const agencyUserSchema = new mongoose.Schema({
 	    verifiedAt: Date
 	  }
 	},
-	walletBalance: { type: Number, default: 0 }
+	walletBalance: { type: Number, default: 0 },
+	
+	// Push Notification FCM Tokens (support multiple devices)
+	fcmTokens: [{
+	  token: { type: String, required: true },
+	  deviceId: { type: String }, // Optional device identifier
+	  platform: { type: String, enum: ['ios', 'android', 'web'] },
+	  createdAt: { type: Date, default: Date.now }
+	}]
 }, { timestamps: true });
 
 module.exports = mongoose.model('AgencyUser', agencyUserSchema);

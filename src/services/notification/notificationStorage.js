@@ -3,8 +3,23 @@ const Notification = require('../../models/common/Notification');
 // Save notification to database
 const saveNotification = async (receiverId, receiverType, title, message, type, data = {}, priority = 'medium') => {
   try {
+    // Convert receiverType to receiverModel for database schema
+    const receiverModelMap = {
+      'admin': 'Admin',
+      'male': 'MaleUser',
+      'female': 'FemaleUser',
+      'agency': 'AgencyUser'
+    };
+    
+    if (!receiverModelMap[receiverType]) {
+      throw new Error(`Invalid receiverType: ${receiverType}`);
+    }
+    
+    const receiverModel = receiverModelMap[receiverType];
+    
     const notification = new Notification({
       receiverId,
+      receiverModel,
       receiverType,
       title,
       message,
@@ -71,12 +86,9 @@ const getAdminNotifications = async (page = 1, limit = 10, filters = {}) => {
   try {
     const skip = (page - 1) * limit;
     
-    // Query for admin notifications - includes both specific admins and admin group (receiverId: null)
+    // Query for admin notifications - targets all admin users
     let query = {
-      $or: [
-        { receiverType: 'admin' },
-        { receiverType: 'staff' } // Include staff notifications if needed
-      ]
+      receiverModel: 'Admin'
     };
 
     // Apply filters

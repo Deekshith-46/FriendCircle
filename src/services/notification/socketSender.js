@@ -52,9 +52,35 @@ const sendNotificationWithIntent = async (userId, userType, title, body, data = 
 
     // Send push notification if needed
     if (shouldSendPush) {
-      // For now, we'll skip push notifications since UserToken model doesn't exist
-      // This would need to be implemented with a proper token storage mechanism
-      console.log('Push notification would be sent here if UserToken model existed');
+      // Get user to access FCM tokens
+      let User;
+      if (userType === 'male') {
+        User = require('../../models/maleUser/MaleUser');
+      } else if (userType === 'female') {
+        User = require('../../models/femaleUser/FemaleUser');
+      } else if (userType === 'agency') {
+        User = require('../../models/agency/AgencyUser');
+      } else {
+        console.log(`Invalid user type: ${userType}`);
+        return deliveryResult;
+      }
+      
+      const user = await User.findById(userId).select('fcmTokens');
+      if (user && user.fcmTokens && user.fcmTokens.length > 0) {
+        const pushResults = [];
+        for (const tokenObj of user.fcmTokens) {
+          const pushSuccess = await sendPushNotification(tokenObj.token, title, body, data);
+          pushResults.push({
+            token: tokenObj.token,
+            platform: tokenObj.platform,
+            success: pushSuccess
+          });
+        }
+        deliveryResult.push = pushResults;
+        console.log(`Push notifications sent to ${user.fcmTokens.length} device(s) for user ${userId}`);
+      } else {
+        console.log(`No FCM tokens found for user ${userId}, skipping push notification`);
+      }
     }
 
     console.log(`Notification delivery result for ${userId}:`, deliveryResult);
