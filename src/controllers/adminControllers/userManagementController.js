@@ -88,94 +88,93 @@ exports.cleanUserReferences = async (req, res) => {
 
 // List users
 exports.listUsers = async (req, res) => {
-	try {
-		const { type } = req.query; // 'male' | 'female' | 'agency' | undefined (all)
-		let data;
-		if (type === 'male') {
-			data = await MaleUser.find().populate({
-				path: 'images',
-				select: 'maleUserId imageUrl createdAt updatedAt'
-			}).populate({
-				path: 'interests',
-				select: 'title _id status'
-			}).populate({
-				path: 'languages',
-				select: 'title _id status'
-			}).populate({
-				path: 'relationshipGoals',
-				select: 'title _id status'
-			}).populate({
-				path: 'religion',
-				select: 'title _id status'
-			}).populate({
-				path: 'favourites',
-				select: 'name email'
-			});
-		} else if (type === 'female') {
-			data = await FemaleUser.find().populate({
-				path: 'images',
-				select: 'femaleUserId imageUrl createdAt updatedAt'
-			}).populate({
-				path: 'interests',
-				select: 'title _id status'
-			}).populate({
-				path: 'languages',
-				select: 'title _id status'
-			}).populate({
-				path: 'favourites',
-				select: 'firstName lastName email'
-			});
-		} else if (type === 'agency') {
-			data = await AgencyUser.find().populate({
-				path: 'referredByAgency',
-				select: 'firstName lastName email'
-			});
-		} else {
-			const [males, females, agencies] = await Promise.all([
-				MaleUser.find().populate({
-					path: 'images',
-					select: 'maleUserId imageUrl createdAt updatedAt'
-				}).populate({
-					path: 'interests',
-					select: 'title _id status'
-				}).populate({
-					path: 'languages',
-					select: 'title _id status'
-				}).populate({
-					path: 'relationshipGoals',
-					select: 'title _id status'
-				}).populate({
-					path: 'religion',
-					select: 'title _id status'
-				}).populate({
-					path: 'favourites',
-					select: 'name email'
-				}),
-				FemaleUser.find().populate({
-					path: 'images',
-					select: 'femaleUserId imageUrl createdAt updatedAt'
-				}).populate({
-					path: 'interests',
-					select: 'title _id status'
-				}).populate({
-					path: 'languages',
-					select: 'title _id status'
-				}).populate({
-					path: 'favourites',
-					select: 'firstName lastName email'
-				}),
-				AgencyUser.find().populate({
-					path: 'referredByAgency',
-					select: 'firstName lastName email'
-				})
-			]);
-			data = { males, females, agencies };
-		}
-		return res.json({ success: true, data });
-	} catch (err) {
-		return res.status(500).json({ success: false, error: err.message });
-	}
+  try {
+    const { type } = req.query;
+    let data;
+
+    /* ================== MALE ================== */
+    if (type === 'male') {
+      data = await MaleUser.find()
+        .select('-searchPreferences -balance')
+        .populate({ path: 'images', select: 'maleUserId imageUrl createdAt updatedAt' })
+        .populate({ path: 'interests', select: 'title _id' })
+        .populate({ path: 'languages', select: 'title _id' })
+        .populate({ path: 'relationshipGoals', select: 'title _id' })
+        .populate({ path: 'religion', select: 'title _id' })
+        .populate({ path: 'favourites', select: 'name email' })
+
+        // join → female user
+        .populate({
+          path: 'malefollowing',
+          populate: { path: 'femaleUserId', select: 'name' }
+        })
+        .populate({
+          path: 'malefollowers',
+          populate: { path: 'femaleUserId', select: 'name' }
+        })
+
+        // referred by (male)
+        .populate({
+          path: 'referredBy',
+          select: 'firstName lastName'
+        });
+
+      // map to {id, name}
+      data = data.map(u => {
+        const obj = u.toObject();
+
+        const mapFemale = arr =>
+          arr
+            ?.filter(f => f.femaleUserId)
+            .map(f => ({
+              id: f.femaleUserId._id,
+              name: f.femaleUserId.name
+            })) || [];
+
+        const mapReferred = arr =>
+          arr?.map(r => ({
+            id: r._id,
+            name: `${r.firstName} ${r.lastName || ''}`.trim()
+          })) || [];
+
+        return {
+          ...obj,
+          malefollowing: mapFemale(obj.malefollowing),
+          malefollowers: mapFemale(obj.malefollowers),
+          referredBy: mapReferred(obj.referredBy)
+        };
+      });
+
+      return res.json({ success: true, data });
+    }
+
+    /* ================== FEMALE ================== */
+    if (type === 'female') {
+      data = await FemaleUser.find()
+        .select('name email score earnings totalOnlineMinutes images')
+        .populate({ path: 'images', select: 'femaleUserId imageUrl createdAt updatedAt' })
+        .populate({ path: 'interests', select: 'title _id' })
+        .populate({ path: 'languages', select: 'title _id' });
+
+      return res.json({ success: true, data });
+    }
+
+    /* ================== AGENCY ================== */
+    if (type === 'agency') {
+      data = await AgencyUser.find()
+        .populate({ path: 'referredByAgency', select: 'firstName lastName email' });
+
+      return res.json({ success: true, data });
+    }
+
+    return res.json({ success: true, data: [] });
+
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
 };
+
+
 
 // Toggle status active/inactive
 exports.toggleStatus = async (req, res) => {

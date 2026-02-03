@@ -33,7 +33,7 @@ exports.updateInterests = async (req, res) => {
         message: messages.PROFILE.INTEREST_REQUIRED
       });
     }
-    
+
     // Parse interests in case it comes as string from form-data
     let parsedInterestIds = interests;
     if (typeof parsedInterestIds === 'string') {
@@ -46,31 +46,31 @@ exports.updateInterests = async (req, res) => {
         });
       }
     }
-    
+
     if (!parsedInterestIds || !Array.isArray(parsedInterestIds)) {
       return res.status(400).json({
         success: false,
         message: messages.PROFILE.INTEREST_REQUIRED
       });
     }
-    
+
     // Validate that all IDs are valid ObjectIds
     const validIds = parsedInterestIds
       .map(id => mongoose.Types.ObjectId.isValid(id) ? id : null)
       .filter(Boolean);
-    
+
     if (validIds.length === 0) {
       return res.status(400).json({
         success: false,
         message: messages.PROFILE.INTEREST_REQUIRED
       });
     }
-    
+
     // Validate that these ObjectIds exist in the Interest collection
     const Interest = require('../../models/admin/Interest');
     const validInterests = await Interest.find({ _id: { $in: validIds } });
     const validInterestIds = validInterests.map(i => i._id);
-    
+
     // Get the existing user to preserve other data
     const existingUser = await MaleUser.findById(userId);
     if (!existingUser) {
@@ -79,11 +79,20 @@ exports.updateInterests = async (req, res) => {
         message: messages.COMMON.USER_NOT_FOUND
       });
     }
-    
+
     // Combine existing interests with new ones, avoiding duplicates
-    const existingInterestIds = existingUser.interests || [];
-    const allInterestIds = [...new Set([...existingInterestIds, ...validInterestIds])];
-    
+    // 🔒 Normalize + dedupe by string value
+    const normalize = id => id.toString();
+
+    const existingInterestIds = (existingUser.interests || []).map(normalize);
+    const newInterestIds = validInterestIds.map(id => id.toString());
+
+    // Merge + dedupe by value
+    const merged = [...new Set([...existingInterestIds, ...newInterestIds])];
+
+    // Convert back to ObjectId
+    const allInterestIds = merged.map(id => new mongoose.Types.ObjectId(id));
+
     const user = await MaleUser.findByIdAndUpdate(
       userId,
       { interests: allInterestIds },
@@ -112,18 +121,16 @@ exports.updateInterests = async (req, res) => {
 // Update user languages
 exports.updateLanguages = async (req, res) => {
   try {
-    // Parse languages from either body or form data
     const languages = parseFormValue(req.body.languages);
     const userId = req.user._id;
 
-    if (!languages || !Array.isArray(languages)) {
+    if (!Array.isArray(languages)) {
       return res.status(400).json({
         success: false,
         message: messages.PROFILE.LANGUAGE_REQUIRED
       });
     }
-    
-    // Parse languages in case it comes as string from form-data
+
     let parsedLanguageIds = languages;
     if (typeof parsedLanguageIds === 'string') {
       try {
@@ -135,32 +142,22 @@ exports.updateLanguages = async (req, res) => {
         });
       }
     }
-    
-    if (!parsedLanguageIds || !Array.isArray(parsedLanguageIds)) {
-      return res.status(400).json({
-        success: false,
-        message: messages.PROFILE.LANGUAGE_REQUIRED
-      });
-    }
-    
-    // Validate that all IDs are valid ObjectIds
+
     const validIds = parsedLanguageIds
-      .map(id => mongoose.Types.ObjectId.isValid(id) ? id : null)
+      .map(id => mongoose.Types.ObjectId.isValid(id) ? id.toString() : null)
       .filter(Boolean);
-    
+
     if (validIds.length === 0) {
       return res.status(400).json({
         success: false,
         message: messages.PROFILE.LANGUAGE_REQUIRED
       });
     }
-    
-    // Validate that these ObjectIds exist in the Language collection
+
     const Language = require('../../models/admin/Language');
     const validLanguages = await Language.find({ _id: { $in: validIds } });
-    const validLanguageIds = validLanguages.map(l => l._id);
-    
-    // Get the existing user to preserve other data
+    const validLanguageIds = validLanguages.map(l => l._id.toString());
+
     const existingUser = await MaleUser.findById(userId);
     if (!existingUser) {
       return res.status(404).json({
@@ -168,51 +165,47 @@ exports.updateLanguages = async (req, res) => {
         message: messages.COMMON.USER_NOT_FOUND
       });
     }
-    
-    // Combine existing languages with new ones, avoiding duplicates
-    const existingLanguageIds = existingUser.languages || [];
-    const allLanguageIds = [...new Set([...existingLanguageIds, ...validLanguageIds])];
-    
+
+    // 🔒 normalize + dedupe by value
+    const existingIds = (existingUser.languages || []).map(id => id.toString());
+    const merged = [...new Set([...existingIds, ...validLanguageIds])];
+
+    const allLanguageIds = merged.map(id => new mongoose.Types.ObjectId(id));
+
     const user = await MaleUser.findByIdAndUpdate(
       userId,
       { languages: allLanguageIds },
       { new: true }
     ).populate('languages', 'title');
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: messages.COMMON.USER_NOT_FOUND
-      });
-    }
-
     return res.json({
       success: true,
       message: "Languages updated successfully",
-      data: {
-        languages: user.languages
-      }
+      data: { languages: user.languages }
     });
+
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
 };
 
+const normalizeName = name =>
+  String(name).trim().toLowerCase().replace(/\s+/g, ' ');
+
+
 // Update user hobbies
 exports.updateHobbies = async (req, res) => {
   try {
-    // Parse hobbies from either body or form data
     const hobbies = parseFormValue(req.body.hobbies);
     const userId = req.user._id;
 
-    if (!hobbies || !Array.isArray(hobbies)) {
+    if (!Array.isArray(hobbies)) {
       return res.status(400).json({
         success: false,
         message: messages.PROFILE.HOBBIES_REQUIRED
       });
     }
-    
-    // Get the existing user to preserve other data
+
     const existingUser = await MaleUser.findById(userId);
     if (!existingUser) {
       return res.status(404).json({
@@ -220,53 +213,39 @@ exports.updateHobbies = async (req, res) => {
         message: messages.COMMON.USER_NOT_FOUND
       });
     }
-    
-    // Process hobbies to ensure they are in object format with id and name
-    const processedHobbies = hobbies.map(item => {
-      if (typeof item === 'object' && item.id && item.name) {
-        return { id: item.id, name: item.name };
-      } else {
-        const id = require('crypto').randomBytes(8).toString('hex');
-        return { id, name: String(item) };
-      }
-    });
-    
-    // Combine existing hobbies with new ones, avoiding duplicates by name
-    const existingHobbies = existingUser.hobbies || [];
-    const allHobbies = [...existingHobbies];
-    
-    // Add new hobbies that don't already exist
-    for (const newHobby of processedHobbies) {
-      const exists = allHobbies.some(h => h.name === newHobby.name);
-      if (!exists) {
-        allHobbies.push(newHobby);
-      }
+
+    const processed = hobbies.map(item => ({
+      id: item?.id || require('crypto').randomBytes(8).toString('hex'),
+      name: String(item?.name || item)
+    }));
+
+    const map = new Map();
+
+    for (const h of existingUser.hobbies || []) {
+      map.set(normalizeName(h.name), h);
+    }
+
+    for (const h of processed) {
+      map.set(normalizeName(h.name), h);
     }
 
     const user = await MaleUser.findByIdAndUpdate(
       userId,
-      { hobbies: allHobbies },
+      { hobbies: Array.from(map.values()) },
       { new: true }
     );
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: messages.COMMON.USER_NOT_FOUND
-      });
-    }
 
     return res.json({
       success: true,
       message: "Hobbies updated successfully",
-      data: {
-        hobbies: user.hobbies
-      }
+      data: { hobbies: user.hobbies }
     });
+
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
 };
+
 
 // Helper function to parse form-data values (handles JSON strings)
 const parseFormValue = (value) => {
@@ -274,18 +253,18 @@ const parseFormValue = (value) => {
   if (typeof value === 'string') {
     // Remove surrounding quotes if present (handle multiple levels of quotes)
     let trimmed = value.trim();
-    
+
     // Keep removing outer quotes until no more can be removed
     let previous;
     do {
       previous = trimmed;
-      if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || 
-          (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+      if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+        (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
         trimmed = trimmed.slice(1, -1);
       }
-    } while (trimmed !== previous && ((trimmed.startsWith('"') && trimmed.endsWith('"')) || 
-                                    (trimmed.startsWith("'") && trimmed.endsWith("'"))));
-    
+    } while (trimmed !== previous && ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'"))));
+
     // Handle special case where string looks like an array literal with objects
     if (trimmed.startsWith('[') && trimmed.includes('{') && trimmed.includes('}')) {
       try {
@@ -300,7 +279,7 @@ const parseFormValue = (value) => {
             .replace(/\t/g, '')
             .replace(/\r/g, '')
             .replace(/\'/g, "'");
-          
+
           // Try to parse again
           return JSON.parse(processed);
         } catch (e2) {
@@ -314,13 +293,13 @@ const parseFormValue = (value) => {
           } catch (e3) {
             console.error('Failed to parse as string array:', e3);
           }
-          
+
           // Return original value if all parsing attempts fail
           return value;
         }
       }
     }
-    
+
     // Try to parse as JSON array/object
     if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
       try {
@@ -338,18 +317,16 @@ const parseFormValue = (value) => {
 // Update user sports
 exports.updateSports = async (req, res) => {
   try {
-    // Parse sports from either body or form data
     const sports = parseFormValue(req.body.sports);
     const userId = req.user._id;
 
-    if (!sports || !Array.isArray(sports)) {
+    if (!Array.isArray(sports)) {
       return res.status(400).json({
         success: false,
         message: messages.PROFILE.SPORTS_REQUIRED
       });
     }
 
-    // Get the existing user to preserve other data
     const existingUser = await MaleUser.findById(userId);
     if (!existingUser) {
       return res.status(404).json({
@@ -357,69 +334,51 @@ exports.updateSports = async (req, res) => {
         message: messages.COMMON.USER_NOT_FOUND
       });
     }
-    
-    // Process sports to ensure they are in object format with id and name
-    const processedSports = sports.map(item => {
-      if (typeof item === 'object' && item.id && item.name) {
-        return { id: item.id, name: item.name };
-      } else {
-        const id = require('crypto').randomBytes(8).toString('hex');
-        return { id, name: String(item) };
-      }
-    });
-    
-    // Combine existing sports with new ones, avoiding duplicates by name
-    const existingSports = existingUser.sports || [];
-    const allSports = [...existingSports];
-    
-    // Add new sports that don't already exist
-    for (const newSport of processedSports) {
-      const exists = allSports.some(s => s.name === newSport.name);
-      if (!exists) {
-        allSports.push(newSport);
-      }
+
+    const processedSports = sports.map(item => ({
+      id: item?.id || require('crypto').randomBytes(8).toString('hex'),
+      name: String(item?.name || item)
+    }));
+
+    const map = new Map();
+
+    // existing
+    for (const s of existingUser.sports || []) {
+      map.set(normalizeName(s.name), s);
     }
-    
+
+    // new
+    for (const s of processedSports) {
+      map.set(normalizeName(s.name), s);
+    }
+
     const user = await MaleUser.findByIdAndUpdate(
       userId,
-      { sports: allSports },
+      { sports: Array.from(map.values()) },
       { new: true }
     );
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: messages.COMMON.USER_NOT_FOUND
-      });
-    }
+    return res.json({ success: true, message: "Sports updated successfully", data: { sports: user.sports } });
 
-    return res.json({
-      success: true,
-      message: "Sports updated successfully",
-      data: {
-        sports: user.sports
-      }
-    });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
 };
 
+
 // Update user film preferences
 exports.updateFilm = async (req, res) => {
   try {
-    // Parse film from either body or form data
     const film = parseFormValue(req.body.film);
     const userId = req.user._id;
 
-    if (!film || !Array.isArray(film)) {
+    if (!Array.isArray(film)) {
       return res.status(400).json({
         success: false,
         message: messages.PROFILE.FILM_REQUIRED
       });
     }
 
-    // Get the existing user to preserve other data
     const existingUser = await MaleUser.findById(userId);
     if (!existingUser) {
       return res.status(404).json({
@@ -427,69 +386,49 @@ exports.updateFilm = async (req, res) => {
         message: messages.COMMON.USER_NOT_FOUND
       });
     }
-    
-    // Process film to ensure they are in object format with id and name
-    const processedFilm = film.map(item => {
-      if (typeof item === 'object' && item.id && item.name) {
-        return { id: item.id, name: item.name };
-      } else {
-        const id = require('crypto').randomBytes(8).toString('hex');
-        return { id, name: String(item) };
-      }
-    });
-    
-    // Combine existing film preferences with new ones, avoiding duplicates by name
-    const existingFilm = existingUser.film || [];
-    const allFilm = [...existingFilm];
-    
-    // Add new film preferences that don't already exist
-    for (const newFilm of processedFilm) {
-      const exists = allFilm.some(f => f.name === newFilm.name);
-      if (!exists) {
-        allFilm.push(newFilm);
-      }
+
+    const processed = film.map(item => ({
+      id: item?.id || require('crypto').randomBytes(8).toString('hex'),
+      name: String(item?.name || item)
+    }));
+
+    const map = new Map();
+
+    for (const f of existingUser.film || []) {
+      map.set(normalizeName(f.name), f);
     }
-    
+
+    for (const f of processed) {
+      map.set(normalizeName(f.name), f);
+    }
+
     const user = await MaleUser.findByIdAndUpdate(
       userId,
-      { film: allFilm },
+      { film: Array.from(map.values()) },
       { new: true }
     );
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: messages.COMMON.USER_NOT_FOUND
-      });
-    }
+    return res.json({ success: true, message: "Film preferences updated successfully", data: { film: user.film } });
 
-    return res.json({
-      success: true,
-      message: "Film preferences updated successfully",
-      data: {
-        film: user.film
-      }
-    });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
 };
 
+
 // Update user music preferences
 exports.updateMusic = async (req, res) => {
   try {
-    // Parse music from either body or form data
     const music = parseFormValue(req.body.music);
     const userId = req.user._id;
 
-    if (!music || !Array.isArray(music)) {
+    if (!Array.isArray(music)) {
       return res.status(400).json({
         success: false,
         message: messages.PROFILE.MUSIC_REQUIRED
       });
     }
 
-    // Get the existing user to preserve other data
     const existingUser = await MaleUser.findById(userId);
     if (!existingUser) {
       return res.status(404).json({
@@ -497,69 +436,49 @@ exports.updateMusic = async (req, res) => {
         message: messages.COMMON.USER_NOT_FOUND
       });
     }
-    
-    // Process music to ensure they are in object format with id and name
-    const processedMusic = music.map(item => {
-      if (typeof item === 'object' && item.id && item.name) {
-        return { id: item.id, name: item.name };
-      } else {
-        const id = require('crypto').randomBytes(8).toString('hex');
-        return { id, name: String(item) };
-      }
-    });
-    
-    // Combine existing music preferences with new ones, avoiding duplicates by name
-    const existingMusic = existingUser.music || [];
-    const allMusic = [...existingMusic];
-    
-    // Add new music preferences that don't already exist
-    for (const newMusic of processedMusic) {
-      const exists = allMusic.some(m => m.name === newMusic.name);
-      if (!exists) {
-        allMusic.push(newMusic);
-      }
+
+    const processed = music.map(item => ({
+      id: item?.id || require('crypto').randomBytes(8).toString('hex'),
+      name: String(item?.name || item)
+    }));
+
+    const map = new Map();
+
+    for (const m of existingUser.music || []) {
+      map.set(normalizeName(m.name), m);
     }
-    
+
+    for (const m of processed) {
+      map.set(normalizeName(m.name), m);
+    }
+
     const user = await MaleUser.findByIdAndUpdate(
       userId,
-      { music: allMusic },
+      { music: Array.from(map.values()) },
       { new: true }
     );
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: messages.COMMON.USER_NOT_FOUND
-      });
-    }
+    return res.json({ success: true, message: "Music preferences updated successfully", data: { music: user.music } });
 
-    return res.json({
-      success: true,
-      message: "Music preferences updated successfully",
-      data: {
-        music: user.music
-      }
-    });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
 };
 
+
 // Update user travel preferences
 exports.updateTravel = async (req, res) => {
   try {
-    // Parse travel from either body or form data
     const travel = parseFormValue(req.body.travel);
     const userId = req.user._id;
 
-    if (!travel || !Array.isArray(travel)) {
+    if (!Array.isArray(travel)) {
       return res.status(400).json({
         success: false,
         message: messages.PROFILE.TRAVEL_REQUIRED
       });
     }
 
-    // Get the existing user to preserve other data
     const existingUser = await MaleUser.findById(userId);
     if (!existingUser) {
       return res.status(404).json({
@@ -567,54 +486,34 @@ exports.updateTravel = async (req, res) => {
         message: messages.COMMON.USER_NOT_FOUND
       });
     }
-    
-    // Process travel to ensure they are in object format with id and name
-    const processedTravel = travel.map(item => {
-      if (typeof item === 'object' && item.id && item.name) {
-        return { id: item.id, name: item.name };
-      } else {
-        const id = require('crypto').randomBytes(8).toString('hex');
-        return { id, name: String(item) };
-      }
-    });
-    
-    // Combine existing travel preferences with new ones, avoiding duplicates by name
-    const existingTravel = existingUser.travel || [];
-    const allTravel = [...existingTravel];
-    
-    // Add new travel preferences that don't already exist
-    for (const newTravel of processedTravel) {
-      const exists = allTravel.some(t => t.name === newTravel.name);
-      if (!exists) {
-        allTravel.push(newTravel);
-      }
+
+    const processed = travel.map(item => ({
+      id: item?.id || require('crypto').randomBytes(8).toString('hex'),
+      name: String(item?.name || item)
+    }));
+
+    const map = new Map();
+
+    for (const t of existingUser.travel || []) {
+      map.set(normalizeName(t.name), t);
     }
-    
+
+    for (const t of processed) {
+      map.set(normalizeName(t.name), t);
+    }
+
     const user = await MaleUser.findByIdAndUpdate(
       userId,
-      { travel: allTravel },
+      { travel: Array.from(map.values()) },
       { new: true }
     );
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: messages.COMMON.USER_NOT_FOUND
-      });
-    }
+    return res.json({ success: true, message: "Travel preferences updated successfully", data: { travel: user.travel } });
 
-    return res.json({
-      success: true,
-      message: "Travel preferences updated successfully",
-      data: {
-        travel: user.travel
-      }
-    });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
 };
-
 // Register Male User and Send OTP
 exports.registerUser = async (req, res) => {
   const { firstName, lastName, email, password, referralCode } = req.body;
