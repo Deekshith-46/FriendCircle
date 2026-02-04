@@ -8,10 +8,11 @@ const notificationEvents = require('../../constants/notificationEvents');
 // Submit KYC for agency
 exports.submitKYC = async (req, res) => {
   const { method, accountDetails, upiId } = req.body;
+
   try {
     const AgencyUser = require('../../models/agency/AgencyUser');
     const user = await AgencyUser.findById(req.user.id);
-    
+
     // Check conditions for submitting KYC
     if (!user.profileCompleted) {
       return res.status(400).json({
@@ -19,32 +20,31 @@ exports.submitKYC = async (req, res) => {
         message: 'Profile must be completed before submitting KYC'
       });
     }
-    
+
     if (user.reviewStatus !== 'accepted') {
       return res.status(400).json({
         success: false,
         message: 'Account must be approved before submitting KYC'
       });
     }
-    
-    const kyc = new AgencyKYC({ 
-      user: req.user.id, 
-      method, 
-      accountDetails, 
-      upiId 
+
+    const kyc = new AgencyKYC({
+      user: req.user.id,
+      method,
+      accountDetails,
+      upiId
     });
     await kyc.save();
-    
-    // Initialize kycDetails with new structure if it doesn't exist or has old structure
+
+    // Initialize kycDetails
     if (!user.kycDetails || !user.kycDetails.bank || !user.kycDetails.upi) {
       user.kycDetails = {
         bank: {},
         upi: {}
       };
     }
-    
+
     if (method === "account_details" && accountDetails) {
-      // Set bank details with pending status
       user.kycDetails.bank = {
         _id: new mongoose.Types.ObjectId(),
         name: accountDetails.name,
@@ -53,31 +53,28 @@ exports.submitKYC = async (req, res) => {
         status: 'pending',
         verifiedAt: null
       };
-      
-      // Update overall kycStatus if no approved method exists
+
       if (user.kycStatus === 'completeKyc') {
         user.kycStatus = 'pending';
       }
     }
-    
+
     if (method === "upi_id" && upiId) {
-      // Set UPI details with pending status
       user.kycDetails.upi = {
         _id: new mongoose.Types.ObjectId(),
         upiId: upiId,
         status: 'pending',
         verifiedAt: null
       };
-      
-      // Update overall kycStatus if no approved method exists
+
       if (user.kycStatus === 'completeKyc') {
         user.kycStatus = 'pending';
       }
     }
-    
+
     await user.save();
-    
-    // Notify admin about new KYC submission
+
+    // Notify admin
     notificationService.handleEvent(
       notificationEvents.KYC_SUBMITTED,
       {
@@ -86,12 +83,30 @@ exports.submitKYC = async (req, res) => {
         method
       }
     );
-    
-    res.json({ success: true, message: messages.AGENCY.KYC_SUBMITTED });
+
+    // Decide redirect page
+    let redirectTo = 'UNDER_REVIEW';
+
+    if (user.kycStatus === 'accepted') {
+      redirectTo = 'VERIFICATION_DONE';
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: user.kycStatus === 'accepted'
+        ? 'KYC already verified.'
+        : 'KYC submitted for verification.',
+      redirectTo
+    });
+
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
 };
+
 
 // Admin can verify KYC for agency
 exports.verifyKYC = async (req, res) => {
@@ -101,10 +116,10 @@ exports.verifyKYC = async (req, res) => {
     const kyc = await AgencyKYC.findById(kycId);
     kyc.status = status;
     await kyc.save();
-    
+
     // Update user's KYC status based on admin decision
     const user = await AgencyUser.findById(kyc.user);
-    
+
     // Initialize kycDetails with new structure if it doesn't exist or has old structure
     if (!user.kycDetails || !user.kycDetails.bank || !user.kycDetails.upi) {
       user.kycDetails = {
@@ -112,7 +127,7 @@ exports.verifyKYC = async (req, res) => {
         upi: {}
       };
     }
-    
+
     if (kyc.method === 'account_details' && kyc.accountDetails) {
       // Update bank details with status and verified timestamp
       user.kycDetails.bank = {
@@ -132,23 +147,19 @@ exports.verifyKYC = async (req, res) => {
         verifiedAt: status === 'approved' ? new Date() : user.kycDetails.upi.verifiedAt
       };
     }
-    
+
     // Update overall KYC status based on all methods
     if (status === 'approved') {
       user.kycStatus = 'accepted';
     } else if (status === 'rejected') {
-      // Check if any other method is still accepted, otherwise set to rejected
-      const hasAcceptedMethod = 
-        (user.kycDetails.bank && user.kycDetails.bank.status === 'accepted') ||
-        (user.kycDetails.upi && user.kycDetails.upi.status === 'accepted');
-      
-      if (!hasAcceptedMethod) {
-        user.kycStatus = 'rejected';
-      }
+      user.kycStatus = 'rejected';
+    } else {
+      user.kycStatus = 'pending';
     }
-    
+
+
     await user.save();
-    
+
     // Notify user about KYC status change
     notificationService.handleEvent(
       status === 'approved' ? notificationEvents.KYC_APPROVED : notificationEvents.KYC_REJECTED,
@@ -159,7 +170,7 @@ exports.verifyKYC = async (req, res) => {
         processedBy: 'admin'
       }
     );
-    
+
     res.json({ success: true, data: kyc });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

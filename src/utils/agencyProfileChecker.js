@@ -10,18 +10,27 @@ const checkAndMarkAgencyProfileCompleted = async (agencyId) => {
     const agency = await AgencyUser.findById(agencyId);
     if (!agency) return false;
 
-    // Check if agency has both details and image
-    const hasDetails = agency.firstName && agency.lastName && agency.aadharOrPanNum;
-    const hasImage = agency.image;
+    // If already completed, do nothing
+    if (agency.profileCompleted) {
+      return true;
+    }
 
-    if (hasDetails && hasImage && !agency.profileCompleted) {
-      // Mark as profile completed and set review status to pending
+    // Check required fields
+    const hasDetails =
+      agency.firstName &&
+      agency.lastName &&
+      agency.aadharOrPanNum;
+
+    const hasImage = !!agency.image;
+
+    // Mark completed only once
+    if (hasDetails && hasImage) {
       agency.profileCompleted = true;
-      agency.reviewStatus = 'pending';
+      agency.reviewStatus = 'pending'; // 🔥 matches female flow
       await agency.save();
       return true;
     }
-    
+
     return false;
   } catch (error) {
     console.error('Error in checkAndMarkAgencyProfileCompleted:', error);
