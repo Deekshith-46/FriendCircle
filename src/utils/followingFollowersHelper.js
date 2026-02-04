@@ -125,6 +125,7 @@ const getDetailedFollowingList = async (userId, userType) => {
   let followingList = [];
   let blockedByCurrentUserIds = [];
   let blockedByOthersIds = [];
+  let earningsMap = {}; // Initialize earningsMap for both user types
 
   if (userType === 'male') {
     // Get list of users that the current male user has blocked
@@ -143,6 +144,7 @@ const getDetailedFollowingList = async (userId, userType) => {
       }
     }).populate({
       path: 'femaleUserId',
+      select: 'firstName lastName name age dateOfBirth onlineStatus',
       populate: {
         path: 'images',
         model: 'FemaleImage',
@@ -166,6 +168,7 @@ const getDetailedFollowingList = async (userId, userType) => {
       }
     }).populate({
       path: 'maleUserId',
+      select: 'firstName lastName name age dateOfBirth onlineStatus',
       populate: {
         path: 'images',
         model: 'MaleImage',
@@ -174,9 +177,9 @@ const getDetailedFollowingList = async (userId, userType) => {
     }).select('maleUserId dateFollowed');
 
     // Get earnings breakdown for each male user
-    const maleIds = followingList.map(relationship => relationship.maleUserId._id);
+    const validRelationships = followingList.filter(relationship => relationship.maleUserId && relationship.maleUserId._id);
+    const maleIds = validRelationships.map(relationship => relationship.maleUserId._id);
     const earningsData = await getEarningsBreakdownByMaleIds(userId, maleIds);
-    var earningsMap = {}; // Using var to hoist to function scope
     earningsData.forEach(earning => {
       earningsMap[earning.maleId] = earning.earnings;
     });
@@ -185,8 +188,24 @@ const getDetailedFollowingList = async (userId, userType) => {
   return followingList.map(relationship => {
     const user = userType === 'male' ? relationship.femaleUserId : relationship.maleUserId;
     
+    // Add null check for user object
+    if (!user) {
+      console.warn('Warning: User object is null/undefined in following relationship');
+      return {
+        _id: null,
+        name: 'Unknown User',
+        age: null,
+        profileImage: null,
+        onlineStatus: false,
+        dateFollowed: relationship.dateFollowed,
+        earnings: 0
+      };
+    }
+    
     // Get earnings data for this user
-    const earnings = earningsMap[relationship[userType === 'male' ? 'femaleUserId' : 'maleUserId']._id.toString()] || {
+    const userKey = userType === 'male' ? 'femaleUserId' : 'maleUserId';
+    const userId = relationship[userKey] ? relationship[userKey]._id.toString() : null;
+    const earnings = (userId && earningsMap[userId]) || {
       total: 0,
       calls: 0,
       callCoins: 0,
@@ -198,9 +217,7 @@ const getDetailedFollowingList = async (userId, userType) => {
 
     return {
       _id: user._id,
-      name: userType === 'male' 
-        ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-        : `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+      name: user.name || (user.firstName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown User'),
       age: user.age || calculateAgeFromDOB(user.dateOfBirth) || null,
       profileImage: user.images && user.images.length > 0 ? user.images[0].imageUrl : null,
       onlineStatus: user.onlineStatus || false,
@@ -217,6 +234,7 @@ const getDetailedFollowersList = async (userId, userType) => {
   let followersList = [];
   let blockedByCurrentUserIds = [];
   let blockedByOthersIds = [];
+  let earningsMap = {}; // Initialize earningsMap for both user types
 
   if (userType === 'male') {
     // Get list of users that the current male user has blocked
@@ -235,6 +253,7 @@ const getDetailedFollowersList = async (userId, userType) => {
       }
     }).populate({
       path: 'femaleUserId',
+      select: 'firstName lastName name age dateOfBirth onlineStatus',
       populate: {
         path: 'images',
         model: 'FemaleImage',
@@ -258,6 +277,7 @@ const getDetailedFollowersList = async (userId, userType) => {
       }
     }).populate({
       path: 'maleUserId',
+      select: 'firstName lastName name age dateOfBirth onlineStatus',
       populate: {
         path: 'images',
         model: 'MaleImage',
@@ -266,9 +286,9 @@ const getDetailedFollowersList = async (userId, userType) => {
     }).select('maleUserId dateFollowed');
 
     // Get earnings breakdown for each male user
-    const maleIds = followersList.map(relationship => relationship.maleUserId._id);
+    const validRelationships = followersList.filter(relationship => relationship.maleUserId && relationship.maleUserId._id);
+    const maleIds = validRelationships.map(relationship => relationship.maleUserId._id);
     const earningsData = await getEarningsBreakdownByMaleIds(userId, maleIds);
-    var earningsMap = {}; // Using var to hoist to function scope for this function
     earningsData.forEach(earning => {
       earningsMap[earning.maleId] = earning.earnings;
     });
@@ -277,8 +297,24 @@ const getDetailedFollowersList = async (userId, userType) => {
   return followersList.map(relationship => {
     const user = userType === 'male' ? relationship.femaleUserId : relationship.maleUserId;
     
+    // Add null check for user object
+    if (!user) {
+      console.warn('Warning: User object is null/undefined in followers relationship');
+      return {
+        _id: null,
+        name: 'Unknown User',
+        age: null,
+        profileImage: null,
+        onlineStatus: false,
+        dateFollowed: relationship.dateFollowed,
+        earnings: 0
+      };
+    }
+    
     // Get earnings data for this user
-    const earnings = earningsMap[relationship[userType === 'male' ? 'femaleUserId' : 'maleUserId']._id.toString()] || {
+    const userKey = userType === 'male' ? 'femaleUserId' : 'maleUserId';
+    const userId = relationship[userKey] ? relationship[userKey]._id.toString() : null;
+    const earnings = (userId && earningsMap[userId]) || {
       total: 0,
       calls: 0,
       callCoins: 0,
@@ -290,9 +326,7 @@ const getDetailedFollowersList = async (userId, userType) => {
 
     return {
       _id: user._id,
-      name: userType === 'male' 
-        ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-        : `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+      name: user.name || (user.firstName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown User'),
       age: user.age || calculateAgeFromDOB(user.dateOfBirth) || null,
       profileImage: user.images && user.images.length > 0 ? user.images[0].imageUrl : null,
       onlineStatus: user.onlineStatus || false,

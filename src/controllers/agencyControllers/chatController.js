@@ -13,8 +13,10 @@ const getOrCreateChatRoom = async (agencyId, femaleId) => {
     throw new Error('Female user not found');
   }
 
+  // Check if the female user is referred by this agency
+  // referredByAgency is a single ObjectId reference, not an array
   const isReferredByAgency = femaleUser.referredByAgency && 
-    femaleUser.referredByAgency.some(agency => agency.toString() === agencyId.toString());
+    femaleUser.referredByAgency.toString() === agencyId.toString();
   
   if (!isReferredByAgency) {
     throw new Error('Agency can only chat with users they have referred');

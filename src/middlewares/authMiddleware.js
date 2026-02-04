@@ -6,21 +6,30 @@ const MaleUser = require('../models/maleUser/MaleUser');
 const AgencyUser = require('../models/agency/AgencyUser');
 const messages = require('../validations/messages');
 const auth = async (req, res, next) => {
+  console.log('=== AUTH MIDDLEWARE ===');
+  console.log('Original URL:', req.originalUrl);
+  console.log('Authorization header:', req.headers.authorization);
+  
   let token;
   
   // Check if the Authorization header exists and starts with 'Bearer'
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
+    console.log('Extracted token:', token?.substring(0, 20) + '...');
+  } else {
+    console.log('No Bearer token found in Authorization header');
   }
 
   // If no token is found, respond with a 401 status
   if (!token) {
+    console.log('❌ No token provided - returning 401');
     return res.status(401).json({ success: false, message: messages.AUTH_MIDDLEWARE.NOT_AUTHORIZED });
   }
 
   try {
     // Decode the token to get user information (either admin or female user)
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('JWT decoded successfully:', decoded);
 
     // Check the route and decide whether to authenticate an admin, staff, or other users
     if (req.originalUrl.startsWith('/admin')) {

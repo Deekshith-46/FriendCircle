@@ -4,6 +4,16 @@ const router = express.Router();
 const auth = require('../../middlewares/authMiddleware');
 const notificationController = require('../../controllers/common/notificationController');
 
+// Debug middleware to log all requests to this router
+router.use((req, res, next) => {
+  console.log('=== NOTIFICATION ROUTER ===');
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  next();
+});
+
 // Save FCM token for push notifications
 router.post('/save-token', auth, notificationController.saveFCMToken);
 

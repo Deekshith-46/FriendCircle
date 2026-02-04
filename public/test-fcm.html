@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FCM Token Generator - Friend Circle</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .token-display {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+            word-break: break-all;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .hidden {
+            display: none;
+        }
+        .user-info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 FCM Token Generator</h1>
+            <p>Generate Firebase Cloud Messaging token for notification testing</p>
+        </div>
+
+        <div class="user-info">
+            <h3>👤 User Information</h3>
+            <p><strong>Token:</strong> <span id="userTokenDisplay">Not set</span></p>
+            <button class="button" id="setTokenBtn">Set User Token</button>
+            <button class="button" id="clearTokenBtn">Clear Token</button>
+        </div>
+
+        <div id="status" class="status info">
+            <strong>Ready:</strong> Click "Get Notification Permission" to start
+        </div>
+
+        <div style="text-align: center; margin: 20px 0;">
+            <button id="permissionBtn" class="button">
+                🔔 Get Notification Permission
+            </button>
+            <button id="tokenBtn" class="button" disabled>
+                📡 Generate FCM Token
+            </button>
+            <button id="sendToServerBtn" class="button" disabled>
+                🚀 Save to Server
+            </button>
+            <button id="getNotificationsBtn" class="button" disabled>
+                🔔 Get Notifications
+            </button>
+        </div>
+
+        <div id="tokenContainer" class="hidden">
+            <h3>Your FCM Token:</h3>
+            <div class="token-display" id="tokenDisplay"></div>
+            <div style="margin-top: 15px;">
+                <button class="button" id="copyTokenBtn">📋 Copy Token</button>
+                <button class="button" id="testTokenBtn">🧪 Test Token</button>
+            </div>
+        </div>
+
+        <div id="serverResponse" class="hidden">
+            <h3>Server Response:</h3>
+            <div class="token-display" id="serverDisplay"></div>
+        </div>
+
+        <div id="notificationsContainer" class="hidden">
+            <h3>🔔 User Notifications:</h3>
+            <div id="notificationsDisplay"></div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+    
+    <script>
+        // ALL FUNCTIONS MUST BE DECLARED BEFORE EVENT LISTENERS
+        
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyATP24MQ3PITrpoBsBoEJvC_efQf99romo",
+            authDomain: "friendcircle-notifications.firebaseapp.com",
+            projectId: "friendcircle-notifications",
+            storageBucket: "friendcircle-notifications.firebasestorage.app",
+            messagingSenderId: "336749988199",
+            appId: "1:336749988199:web:4cb9b0d9ff27d63c9987c2",
+            measurementId: "G-DP46EJ1FRW"
+        };
+
+        // Global variables
+        let fcmToken = null;
+        let userToken = localStorage.getItem('userToken') || '';
+        let messaging = null;
+        
+        // Initialize Firebase
+        function initializeFirebase() {
+            if (!firebase.apps.length) {
+                try {
+                    firebase.initializeApp(firebaseConfig);
+                    messaging = firebase.messaging();
+                    console.log('✅ Firebase initialized');
+                    updateStatus('Firebase initialized successfully', 'success');
+                    return true;
+                } catch (error) {
+                    console.error('❌ Firebase initialization error:', error);
+                    updateStatus('Firebase initialization failed: ' + error.message, 'error');
+                    return false;
+                }
+            } else {
+                messaging = firebase.messaging();
+                return true;
+            }
+        }
+        
+        // Update UI with current user token
+        function updateUserTokenDisplay() {
+            const display = document.getElementById('userTokenDisplay');
+            if (userToken) {
+                display.textContent = userToken.substring(0, 30) + '...';
+                document.getElementById('getNotificationsBtn').disabled = false;
+            } else {
+                display.textContent = 'Not set';
+                document.getElementById('getNotificationsBtn').disabled = true;
+            }
+        }
+        
+        // Update status message
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.className = `status ${type}`;
+            statusElement.innerHTML = `<strong>${type.toUpperCase()}:</strong> ${message}`;
+        }
+        
+        // Show FCM token
+        function showToken(token) {
+            document.getElementById('tokenDisplay').textContent = token;
+            document.getElementById('tokenContainer').classList.remove('hidden');
+            fcmToken = token;
+        }
+        
+        // Show server response
+        function showServerResponse(response) {
+            document.getElementById('serverDisplay').textContent = JSON.stringify(response, null, 2);
+            document.getElementById('serverResponse').classList.remove('hidden');
+        }
+        
+        // Show notifications
+        function showNotifications(notifications) {
+            const container = document.getElementById('notificationsDisplay');
+            if (notifications && notifications.length > 0) {
+                container.innerHTML = notifications.map(notif => `
+                    <div class="token-display" style="margin: 10px 0;">
+                        <strong>${notif.title}</strong><br>
+                        ${notif.message}<br>
+                        <small>Type: ${notif.type} | Status: ${notif.isRead ? 'Read' : 'Unread'}</small>
+                    </div>
+                `).join('');
+            } else {
+                container.innerHTML = '<p>No notifications found</p>';
+            }
+            document.getElementById('notificationsContainer').classList.remove('hidden');
+        }
+        
+        // Set user token
+        function setUserToken() {
+            const token = prompt('Enter your user authentication token:');
+            if (token) {
+                userToken = token;
+                localStorage.setItem('userToken', token);
+                updateUserTokenDisplay();
+                updateStatus('User token set successfully', 'success');
+            }
+        }
+        
+        // Clear user token
+        function clearUserToken() {
+            userToken = '';
+            localStorage.removeItem('userToken');
+            updateUserTokenDisplay();
+            updateStatus('User token cleared', 'info');
+        }
+        
+        // Request notification permission with automatic FCM token generation
+        async function requestPermission() {
+            try {
+                updateStatus('Requesting notification permission...', 'info');
+                
+                // Check if permission already granted
+                if (Notification.permission === "granted") {
+                    updateStatus('✅ Notification permission already granted!', 'success');
+                    document.getElementById('permissionBtn').disabled = true;
+                    // Auto-generate FCM token
+                    await autoGenerateToken();
+                    return;
+                }
+                
+                // Request permission
+                const permission = await Notification.requestPermission();
+                
+                if (permission === "granted") {
+                    updateStatus('✅ Notification permission granted! Generating FCM token automatically...', 'success');
+                    document.getElementById('permissionBtn').disabled = true;
+                    // Auto-generate FCM token immediately
+                    await autoGenerateToken();
+                } else if (permission === "denied") {
+                    updateStatus('❌ Notification permission denied. Please enable notifications in browser settings manually.', 'error');
+                    // Show instructions for manual enabling
+                    setTimeout(() => {
+                        const instructions = `
+🔧 To enable notifications manually:
+
+1. Click the lock/icon next to the URL
+2. Find "Notifications" setting
+3. Change to "Allow"
+4. Refresh this page
+5. Try again
+
+Browser: ${navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Other'}`;
+                        alert(instructions);
+                    }, 1000);
+                } else {
+                    updateStatus('⚠️ Notification permission dismissed. Click the button again to retry.', 'info');
+                }
+            } catch (error) {
+                console.error('Error requesting permission:', error);
+                updateStatus('Error requesting permission: ' + error.message, 'error');
+            }
+        }
+        
+        // Auto-generate FCM token (called automatically after permission)
+        async function autoGenerateToken() {
+            if (!messaging) {
+                updateStatus('❌ Firebase not initialized', 'error');
+                return;
+            }
+            
+            try {
+                updateStatus('🔄 Auto-generating FCM token...', 'info');
+                
+                // Register service worker first
+                if ('serviceWorker' in navigator) {
+                    try {
+                        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                        console.log('Service Worker registered with scope:', registration.scope);
+                        updateStatus('Service worker registered. Generating token...', 'info');
+                    } catch (swError) {
+                        console.error('Service Worker registration failed:', swError);
+                        updateStatus('⚠️ Service worker registration failed, but continuing...', 'info');
+                    }
+                }
+                
+                const vapidKey = "BIYvvagGTdBsoQuh7ujnR4YNRl57ScQcutv66AHPb5ZsHHhQiwXM7P5oCVja3qriIggIniKsgbZpN_U6fhHj2zs";
+                
+                const token = await messaging.getToken({
+                    vapidKey: vapidKey
+                });
+                
+                if (token) {
+                    showToken(token);
+                    updateStatus('✅ FCM token generated and ready!', 'success');
+                    document.getElementById('sendToServerBtn').disabled = false;
+                    
+                    // Auto-save to server if user token exists
+                    if (userToken) {
+                        setTimeout(() => {
+                            autoSaveTokenToServer(token);
+                        }, 1000);
+                    } else {
+                        updateStatus('🔔 FCM token ready! Set user token to auto-save to server.', 'info');
+                    }
+                } else {
+                    updateStatus('❌ Failed to generate token. Try again.', 'error');
+                }
+            } catch (error) {
+                console.error('Error getting token:', error);
+                if (error.code === 'messaging/failed-service-worker-registration') {
+                    updateStatus('❌ Service worker required for FCM. Make sure firebase-messaging-sw.js exists.', 'error');
+                } else {
+                    updateStatus('Error generating token: ' + error.message, 'error');
+                }
+            }
+        }
+        
+        // Manual token generation (kept for backward compatibility)
+        async function getToken() {
+            await autoGenerateToken();
+        }
+        
+        // Auto-save token to server (with detailed error handling)
+        async function autoSaveTokenToServer(token) {
+            try {
+                updateStatus('💾 Auto-saving FCM token to server...', 'info');
+                
+                // Debug: Show what we're sending
+                console.log('Sending token data:', {
+                    fcmToken: token,
+                    deviceId: 'browser_' + Date.now(),
+                    platform: 'web',
+                    userTokenLength: userToken ? userToken.length : 0
+                });
+                
+                const response = await fetch('/notification/save-token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${userToken}`
+                    },
+                    body: JSON.stringify({
+                        fcmToken: token,
+                        deviceId: 'browser_' + Date.now(),
+                        platform: 'web'
+                    })
+                });
+                
+                console.log('Server response status:', response.status);
+                
+                const result = await response.json();
+                console.log('Server response data:', result);
+                
+                if (response.ok && result.success) {
+                    updateStatus('✅ FCM token auto-saved to server successfully!', 'success');
+                    showServerResponse(result);
+                    document.getElementById('getNotificationsBtn').disabled = false;
+                } else {
+                    // Show detailed error
+                    const errorMessage = `❌ Failed to auto-save token: ${result.message || 'Unknown error'}
+Status: ${response.status}
+Response: ${JSON.stringify(result)}`;
+                    updateStatus(errorMessage, 'error');
+                    alert(`Server Error Details:
+
+Status: ${response.status}
+Message: ${result.message || 'No message'}
+
+Check your user token and server logs.`);
+                }
+            } catch (error) {
+                console.error('Network error auto-saving token:', error);
+                updateStatus('Network error auto-saving token: ' + error.message, 'error');
+                alert(`Network Error:\n${error.message}\n\nCheck if server is running on localhost:5001`);
+            }
+        }
+        
+        // Copy token to clipboard
+        function copyToken() {
+            if (fcmToken) {
+                navigator.clipboard.writeText(fcmToken).then(() => {
+                    updateStatus('✅ Token copied to clipboard!', 'success');
+                }).catch(err => {
+                    updateStatus('❌ Failed to copy token', 'error');
+                });
+            }
+        }
+        
+        // Test token
+        function testToken() {
+            if (fcmToken) {
+                alert(`Testing FCM Token:\n\n${fcmToken.substring(0, 100)}...`);
+            }
+        }
+        
+        // Send token to server
+        async function sendTokenToServer() {
+            if (!fcmToken) {
+                updateStatus('❌ No token to send', 'error');
+                return;
+            }
+            
+            if (!userToken) {
+                updateStatus('❌ User token required. Please set user token first.', 'error');
+                return;
+            }
+            
+            try {
+                updateStatus('Sending token to server...', 'info');
+                
+                const response = await fetch('/notification/save-token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${userToken}`
+                    },
+                    body: JSON.stringify({
+                        fcmToken: fcmToken,
+                        deviceId: 'browser_' + Date.now(),
+                        platform: 'web'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    updateStatus('✅ FCM token saved to server successfully!', 'success');
+                    showServerResponse(result);
+                } else {
+                    updateStatus(`❌ Failed to save token: ${result.message || 'Unknown error'}`, 'error');
+                    showServerResponse(result);
+                }
+            } catch (error) {
+                console.error('Error sending token to server:', error);
+                updateStatus('Error sending token to server: ' + error.message, 'error');
+            }
+        }
+        
+        // Get user notifications
+        async function getUserNotifications() {
+            if (!userToken) {
+                updateStatus('❌ User token required. Please set user token first.', 'error');
+                return;
+            }
+            
+            try {
+                updateStatus('Fetching user notifications...', 'info');
+                
+                const response = await fetch('/notification-panel/notifications', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${userToken}`
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    updateStatus('✅ Notifications fetched successfully!', 'success');
+                    showNotifications(result.data.notifications || []);
+                } else {
+                    updateStatus(`❌ Failed to fetch notifications: ${result.message || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error fetching notifications:', error);
+                updateStatus('Error fetching notifications: ' + error.message, 'error');
+            }
+        }
+        
+        // EVENT LISTENERS (ALL FUNCTIONS MUST BE DEFINED ABOVE)
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Firebase on page load
+            initializeFirebase();
+            
+            // Update UI with stored token
+            updateUserTokenDisplay();
+            
+            // Button event listeners
+            document.getElementById('setTokenBtn').addEventListener('click', setUserToken);
+            document.getElementById('clearTokenBtn').addEventListener('click', clearUserToken);
+            document.getElementById('permissionBtn').addEventListener('click', requestPermission);
+            document.getElementById('tokenBtn').addEventListener('click', getToken);
+            document.getElementById('sendToServerBtn').addEventListener('click', sendTokenToServer);
+            document.getElementById('getNotificationsBtn').addEventListener('click', getUserNotifications);
+            document.getElementById('copyTokenBtn').addEventListener('click', copyToken);
+            document.getElementById('testTokenBtn').addEventListener('click', testToken);
+            
+            // Check if already have permission
+            if (Notification.permission === "granted") {
+                document.getElementById('permissionBtn').disabled = true;
+                document.getElementById('tokenBtn').disabled = false;
+                updateStatus('✅ Notification permission already granted. Click "Generate FCM Token"', 'success');
+            } else if (Notification.permission === "denied") {
+                updateStatus('❌ Notification permission denied. Enable in browser settings.', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

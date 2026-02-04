@@ -1,10 +1,24 @@
-let MaleUser, FemaleUser, AgencyUser;
+// Lazy import models with error handling to avoid circular dependencies
+const getModel = (modelPath) => {
+  try {
+    return require(modelPath);
+  } catch (error) {
+    console.error(`❌ Failed to import model ${modelPath}:`, error.message);
+    throw error;
+  }
+};
 
-// Dynamically import models to avoid circular dependency issues
-const loadModels = () => {
-  if (!MaleUser) MaleUser = require('../models/maleUser/MaleUser');
-  if (!FemaleUser) FemaleUser = require('../models/femaleUser/FemaleUser');
-  if (!AgencyUser) AgencyUser = require('../models/agency/AgencyUser');
+const getUserModel = (userType) => {
+  switch (userType) {
+    case 'male':
+      return getModel('../../models/maleUser/MaleUser');
+    case 'female':
+      return getModel('../../models/femaleUser/FemaleUser');
+    case 'agency':
+      return getModel('../../models/agency/AgencyUser');
+    default:
+      throw new Error(`Invalid user type: ${userType}`);
+  }
 };
 
 /**
@@ -17,28 +31,27 @@ const loadModels = () => {
  */
 const saveFCMToken = async (userId, userType, fcmToken, deviceInfo = {}) => {
   try {
-    // Load models dynamically
-    loadModels();
+    console.log('=== FCM MANAGER saveFCMToken ===');
+    console.log('userId:', userId);
+    console.log('userType:', userType);
+    console.log('fcmToken:', fcmToken);
+    console.log('deviceInfo:', deviceInfo);
     
-    let User;
-    if (userType === 'male') {
-      User = MaleUser;
-    } else if (userType === 'female') {
-      User = FemaleUser;
-    } else if (userType === 'agency') {
-      User = AgencyUser;
-    } else {
-      throw new Error('Invalid user type');
-    }
+    // Lazy load model only when needed
+    const User = getUserModel(userType);
+    console.log('User model loaded successfully');
 
     // Check if token already exists for this user
     const user = await User.findById(userId);
+    console.log('User found:', !!user);
     if (!user) {
       console.error(`❌ User ${userId} not found`);
       return false;
     }
 
+    console.log('Current fcmTokens:', user.fcmTokens);
     const existingTokenIndex = user.fcmTokens?.findIndex(tokenObj => tokenObj.token === fcmToken);
+    console.log('existingTokenIndex:', existingTokenIndex);
     
     if (existingTokenIndex !== -1 && existingTokenIndex !== undefined) {
       // Update existing token
@@ -69,11 +82,13 @@ const saveFCMToken = async (userId, userType, fcmToken, deviceInfo = {}) => {
       console.log(`➕ Added new FCM token for ${userType} user ${userId}`);
     }
 
+    console.log('Saving user with updated fcmTokens...');
     await user.save();
     console.log(`✅ FCM tokens updated for ${userType} user ${userId}`);
     return true;
   } catch (error) {
-    console.error('❌ Error saving FCM token:', error.message);
+    console.error('❌ Error saving FCM token:', error);
+    console.error('Error stack:', error.stack);
     return false;
   }
 };
@@ -87,19 +102,8 @@ const saveFCMToken = async (userId, userType, fcmToken, deviceInfo = {}) => {
  */
 const removeFCMToken = async (userId, userType, fcmToken) => {
   try {
-    // Load models dynamically
-    loadModels();
-    
-    let User;
-    if (userType === 'male') {
-      User = MaleUser;
-    } else if (userType === 'female') {
-      User = FemaleUser;
-    } else if (userType === 'agency') {
-      User = AgencyUser;
-    } else {
-      throw new Error('Invalid user type');
-    }
+    // Lazy load model only when needed
+    const User = getUserModel(userType);
 
     const updateResult = await User.updateOne(
       { _id: userId },

@@ -14,10 +14,16 @@ const {
 const notificationService = {
   // Event-based notifications with proper delivery flow
   handleEvent: async (eventType, payload) => {
+    console.log('=== NOTIFICATION SERVICE handleEvent ===');
+    console.log('eventType:', eventType);
+    console.log('payload:', payload);
+    
     // Step 1: Handle event and build notification data
     const notificationData = await handleEvent(eventType, payload);
+    console.log('notificationData:', notificationData);
     
     if (!notificationData) {
+      console.log('No notification data generated');
       return false;
     }
     

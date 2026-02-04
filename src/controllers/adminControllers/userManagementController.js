@@ -7,6 +7,8 @@ const mongoose = require('mongoose');
 const { isValidEmail, isValidMobile } = require('../../validations/validations');
 const AdminLevelConfig = require('../../models/admin/AdminLevelConfig');
 const messages = require('../../validations/messages');
+const notificationService = require('../../services/notificationService');
+const notificationEvents = require('../../constants/notificationEvents');
 
 // Utility function to clean up invalid interests and languages references for a user
 const cleanUpUserReferences = async (userId) => {
@@ -421,6 +423,29 @@ exports.reviewKYC = async (req, res) => {
                 // Set overall KYC status to accepted
                 user.kycStatus = 'accepted';
                 await user.save();
+                
+                // Send notification to female user about KYC approval
+                console.log('=== SENDING KYC APPROVAL NOTIFICATION ===');
+                console.log('User ID:', user._id.toString());
+                console.log('User Type:', 'female');
+                console.log('Processed By:', req.admin?._id || req.staff?._id);
+                
+                try {
+                    const notificationResult = await notificationService.handleEvent(
+                        notificationEvents.KYC_APPROVED,
+                        {
+                            userId: user._id.toString(),
+                            userType: 'female',
+                            processedBy: req.admin?._id || req.staff?._id,
+                            status: 'approved'
+                        }
+                    );
+                    
+                    console.log('✅ Notification result:', notificationResult);
+                } catch (notificationError) {
+                    console.error('❌ Error sending notification:', notificationError);
+                    console.error('Error stack:', notificationError.stack);
+                }
             } else if (status === 'rejected') {
                 // Update the specific method that was rejected
                 const user = await FemaleUser.findById(kyc.user);
@@ -463,6 +488,17 @@ exports.reviewKYC = async (req, res) => {
                 }
                 
                 await user.save();
+                
+                // Send notification to female user about KYC rejection
+                notificationService.handleEvent(
+                    notificationEvents.KYC_REJECTED,
+                    {
+                        userId: user._id.toString(),
+                        userType: 'female',
+                        processedBy: req.admin?._id || req.staff?._id,
+                        status: 'rejected'
+                    }
+                );
             }
         } else {
             const AgencyKYC = require('../../models/agency/KYC');
@@ -503,6 +539,17 @@ exports.reviewKYC = async (req, res) => {
                 // Set overall KYC status to accepted
                 user.kycStatus = 'accepted';
                 await user.save();
+                
+                // Send notification to agency user about KYC approval
+                notificationService.handleEvent(
+                    notificationEvents.KYC_APPROVED,
+                    {
+                        userId: user._id.toString(),
+                        userType: 'agency',
+                        processedBy: req.admin?._id || req.staff?._id,
+                        status: 'approved'
+                    }
+                );
             } else if (status === 'rejected') {
                 // Update the specific method that was rejected
                 const user = await AgencyUser.findById(kyc.user);
@@ -545,6 +592,17 @@ exports.reviewKYC = async (req, res) => {
                 }
                 
                 await user.save();
+                
+                // Send notification to agency user about KYC rejection
+                notificationService.handleEvent(
+                    notificationEvents.KYC_REJECTED,
+                    {
+                        userId: user._id.toString(),
+                        userType: 'agency',
+                        processedBy: req.admin?._id || req.staff?._id,
+                        status: 'rejected'
+                    }
+                );
             }
         }
         

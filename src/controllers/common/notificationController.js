@@ -8,6 +8,11 @@ const { saveFCMToken, removeFCMToken, sendPushNotification } = require('../../se
  */
 exports.saveFCMToken = async (req, res) => {
   try {
+    console.log('=== SAVE FCM TOKEN REQUEST ===');
+    console.log('User ID:', req.user?.id);
+    console.log('User Type:', req.userType);
+    console.log('Request Body:', req.body);
+    
     const { fcmToken, deviceId, platform } = req.body;
     const userId = req.user.id;
     const userType = req.userType; // 'male' or 'female'
@@ -42,7 +47,11 @@ exports.saveFCMToken = async (req, res) => {
       platform: platform || null
     };
 
+    console.log('Calling saveFCMToken with:', { userId, userType, fcmToken, deviceInfo });
+    
     const success = await saveFCMToken(userId, userType, fcmToken, deviceInfo);
+    
+    console.log('saveFCMToken result:', success);
 
     if (success) {
       return res.json({

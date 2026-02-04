@@ -185,7 +185,7 @@ exports.verifyPayment = async (req, res) => {
 // Get coin packages options
 exports.getCoinPricing = async (req, res) => {
   try {
-    const packages = await AdminPackage.find({ status: 'publish' }).sort({ amount: 1 });
+    const packages = await AdminPackage.find({ status: 'publish' }).sort({ amount: 1 }).select('coin amount status');
     res.json({ success: true, data: packages });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

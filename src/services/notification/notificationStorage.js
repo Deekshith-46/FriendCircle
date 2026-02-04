@@ -3,6 +3,14 @@ const Notification = require('../../models/common/Notification');
 // Save notification to database
 const saveNotification = async (receiverId, receiverType, title, message, type, data = {}, priority = 'medium') => {
   try {
+    console.log('=== NOTIFICATION STORAGE ===');
+    console.log('receiverId:', receiverId);
+    console.log('receiverType:', receiverType);
+    console.log('title:', title);
+    console.log('message:', message);
+    console.log('type:', type);
+    console.log('data:', data);
+    
     // Convert receiverType to receiverModel for database schema
     const receiverModelMap = {
       'admin': 'Admin',
@@ -29,10 +37,11 @@ const saveNotification = async (receiverId, receiverType, title, message, type, 
     });
 
     await notification.save();
-    console.log('Notification saved to database:', notification._id);
+    console.log('✅ Notification saved to database:', notification._id);
     return notification._id;
   } catch (error) {
-    console.error('Error saving notification:', error);
+    console.error('❌ Error saving notification:', error);
+    console.error('Error stack:', error.stack);
     return null;
   }
 };

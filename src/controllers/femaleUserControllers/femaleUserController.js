@@ -1232,49 +1232,74 @@ exports.updateUserInfo = async (req, res) => {
       }
     };
     
-    // Update preferences - APPEND new items to existing arrays
-    if (hobbies) {
-      const newHobbies = processPreferenceArray(hobbies, 'hobbies');
-      if (newHobbies && newHobbies.length > 0) {
-        const existingIds = (user.hobbies || []).map(h => h.id);
-        const uniqueNew = newHobbies.filter(h => !existingIds.includes(h.id));
-        user.hobbies = [...(user.hobbies || []), ...uniqueNew];
+    // Update preferences - REPLACE existing arrays with new data
+    if (hobbies !== undefined) {  // Changed from 'if (hobbies)' to handle empty arrays
+      if (Array.isArray(hobbies) && hobbies.length === 0) {
+        // Clear the array if empty array is sent
+        user.hobbies = [];
+      } else {
+        const newHobbies = processPreferenceArray(hobbies, 'hobbies');
+        if (newHobbies && newHobbies.length > 0) {
+          const existingIds = (user.hobbies || []).map(h => h.id);
+          const uniqueNew = newHobbies.filter(h => !existingIds.includes(h.id));
+          user.hobbies = [...(user.hobbies || []), ...uniqueNew];
+        }
       }
     }
     
-    if (sports) {
-      const newSports = processPreferenceArray(sports, 'sports');
-      if (newSports && newSports.length > 0) {
-        const existingIds = (user.sports || []).map(s => s.id);
-        const uniqueNew = newSports.filter(s => !existingIds.includes(s.id));
-        user.sports = [...(user.sports || []), ...uniqueNew];
+    if (sports !== undefined) {  // Changed from 'if (sports)' to handle empty arrays
+      if (Array.isArray(sports) && sports.length === 0) {
+        // Clear the array if empty array is sent
+        user.sports = [];
+      } else {
+        const newSports = processPreferenceArray(sports, 'sports');
+        if (newSports && newSports.length > 0) {
+          const existingIds = (user.sports || []).map(s => s.id);
+          const uniqueNew = newSports.filter(s => !existingIds.includes(s.id));
+          user.sports = [...(user.sports || []), ...uniqueNew];
+        }
       }
     }
     
-    if (film) {
-      const newFilm = processPreferenceArray(film, 'film');
-      if (newFilm && newFilm.length > 0) {
-        const existingIds = (user.film || []).map(f => f.id);
-        const uniqueNew = newFilm.filter(f => !existingIds.includes(f.id));
-        user.film = [...(user.film || []), ...uniqueNew];
+    if (film !== undefined) {  // Changed from 'if (film)' to handle empty arrays
+      if (Array.isArray(film) && film.length === 0) {
+        // Clear the array if empty array is sent
+        user.film = [];
+      } else {
+        const newFilm = processPreferenceArray(film, 'film');
+        if (newFilm && newFilm.length > 0) {
+          const existingIds = (user.film || []).map(f => f.id);
+          const uniqueNew = newFilm.filter(f => !existingIds.includes(f.id));
+          user.film = [...(user.film || []), ...uniqueNew];
+        }
       }
     }
     
-    if (music) {
-      const newMusic = processPreferenceArray(music, 'music');
-      if (newMusic && newMusic.length > 0) {
-        const existingIds = (user.music || []).map(m => m.id);
-        const uniqueNew = newMusic.filter(m => !existingIds.includes(m.id));
-        user.music = [...(user.music || []), ...uniqueNew];
+    if (music !== undefined) {  // Changed from 'if (music)' to handle empty arrays
+      if (Array.isArray(music) && music.length === 0) {
+        // Clear the array if empty array is sent
+        user.music = [];
+      } else {
+        const newMusic = processPreferenceArray(music, 'music');
+        if (newMusic && newMusic.length > 0) {
+          const existingIds = (user.music || []).map(m => m.id);
+          const uniqueNew = newMusic.filter(m => !existingIds.includes(m.id));
+          user.music = [...(user.music || []), ...uniqueNew];
+        }
       }
     }
     
-    if (travel) {
-      const newTravel = processPreferenceArray(travel, 'travel');
-      if (newTravel && newTravel.length > 0) {
-        const existingIds = (user.travel || []).map(t => t.id);
-        const uniqueNew = newTravel.filter(t => !existingIds.includes(t.id));
-        user.travel = [...(user.travel || []), ...uniqueNew];
+    if (travel !== undefined) {  // Changed from 'if (travel)' to handle empty arrays
+      if (Array.isArray(travel) && travel.length === 0) {
+        // Clear the array if empty array is sent
+        user.travel = [];
+      } else {
+        const newTravel = processPreferenceArray(travel, 'travel');
+        if (newTravel && newTravel.length > 0) {
+          const existingIds = (user.travel || []).map(t => t.id);
+          const uniqueNew = newTravel.filter(t => !existingIds.includes(t.id));
+          user.travel = [...(user.travel || []), ...uniqueNew];
+        }
       }
     }
     
