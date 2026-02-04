@@ -270,17 +270,16 @@ exports.agencyVerifyOtp = async (req, res) => {
 exports.completeAgencyProfile = async (req, res) => {
   try {
     const { firstName, lastName, aadharOrPanNum } = req.body;
-    
-    // Helper function to clean form-data values that might be JSON-encoded strings
+
     const cleanValue = (value) => {
       if (typeof value === 'string') {
-        // Remove surrounding quotes if present
         const trimmed = value.trim();
-        if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || 
-            (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+        if (
+          (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+          (trimmed.startsWith("'") && trimmed.endsWith("'"))
+        ) {
           return trimmed.slice(1, -1);
         }
-        // Try to parse as JSON in case it's a JSON-encoded string
         if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
           try {
             return JSON.parse(trimmed);
@@ -292,70 +291,55 @@ exports.completeAgencyProfile = async (req, res) => {
       }
       return value;
     };
-    
+
     const agency = await AgencyUser.findById(req.user.id);
     if (!agency) {
       return res.status(404).json({ success: false, message: messages.COMMON.USER_NOT_FOUND });
     }
 
-    // Check if profile is already completed
     if (agency.profileCompleted) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Profile already completed' 
-      });
+      return res.status(400).json({ success: false, message: 'Profile already completed' });
     }
 
-    // Clean and validate required fields
     const cleanedFirstName = cleanValue(firstName);
     const cleanedLastName = cleanValue(lastName);
     const cleanedAadharOrPanNum = cleanValue(aadharOrPanNum);
-    
+
     if (!cleanedFirstName || !cleanedLastName) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'First name and last name are required' 
-      });
+      return res.status(400).json({ success: false, message: 'First name and last name are required' });
     }
 
-    // Validate that aadharOrPanNum is provided
     if (!cleanedAadharOrPanNum) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Aadhar or PAN number is required' 
-      });
+      return res.status(400).json({ success: false, message: 'Aadhar or PAN number is required' });
     }
 
-    // Update agency details
     agency.firstName = cleanedFirstName;
     agency.lastName = cleanedLastName;
     agency.aadharOrPanNum = cleanedAadharOrPanNum;
-    
-    // Handle image upload if provided
+
     if (req.file) {
-      // Upload image to Cloudinary
       const uploadToCloudinary = require('../../utils/cloudinaryUpload');
       const result = await uploadToCloudinary(req.file.buffer, 'agency_images');
       const imageUrl = result.secure_url;
-      
-      // Create image record
+
       const imageRecord = new AgencyImage({ agencyUserId: req.user.id, imageUrl });
       await imageRecord.save();
-      
+
       agency.image = imageUrl;
     }
 
     await agency.save();
 
-    // Check if both details and image are provided to mark profile as completed
+    // 🔥 THIS WILL NOW SET reviewStatus = 'pending' WHEN COMPLETE
     const profileCompleted = await checkAndMarkAgencyProfileCompleted(agency._id);
-    
-    // Reload agency to get updated values after profile completion check
+
     const updatedAgency = await AgencyUser.findById(req.user.id);
 
-    res.json({ 
-      success: true, 
-      message: profileCompleted ? 'Profile completed and submitted for review' : 'Agency details saved successfully',
+    res.json({
+      success: true,
+      message: profileCompleted
+        ? 'Profile completed and submitted for review'
+        : 'Agency details saved successfully',
       data: {
         firstName: updatedAgency.firstName,
         lastName: updatedAgency.lastName,
@@ -369,6 +353,7 @@ exports.completeAgencyProfile = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
 
 // Update agency profile details
 exports.updateAgencyProfile = async (req, res) => {
