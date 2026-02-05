@@ -101,7 +101,7 @@ exports.agencyRegister = async (req, res) => {
       mobileNumber, 
       otp, 
       referralCode: myReferral, 
-      referredByAgency: referredByAgency ? [referredByAgency._id] : [],
+      referredByAgency: referredByAgency ? referredByAgency._id : null,
       isVerified: false,      // Will be true after OTP verification
       isActive: false,        // Will be true after OTP verification
       profileCompleted: false, // Will be true after profile completion

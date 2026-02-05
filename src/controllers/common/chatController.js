@@ -4,27 +4,25 @@ const FemaleUser = require('../../models/femaleUser/FemaleUser');
 const MaleUser = require('../../models/maleUser/MaleUser');
 const { messages } = require('../../validations/messages');
 const { sendChatNotification } = require('../../services/notificationService');
+const { isBlocked, checkRelationshipPermission } = require('../../services/blockService');
 
 // Helper function to check chat permissions
 const checkChatPermission = async (senderId, senderType, receiverId, receiverType) => {
   try {
-    // Check if either user has blocked the other
-    const BlockList = require('../../models/femaleUser/BlockList');
-
-    // Check if sender has blocked receiver
-    const senderBlocksReceiver = await BlockList.findOne({
-      $or: [
-        { blockerId: senderId, blockedId: receiverId },
-        { blockerId: receiverId, blockedId: senderId }
-      ]
-    });
-
-    if (senderBlocksReceiver) {
+    // Use the new block service for checking block status
+    const blockResult = await isBlocked(senderId, senderType, receiverId, receiverType);
+    
+    if (blockResult.isBlocked) {
       return {
         allowed: false,
         reason: 'BLOCKED_USER'
       };
     }
+    
+    // Continue with relationship permission checks
+    const FemaleBlockList = require('../../models/femaleUser/BlockList');
+    const MaleBlockList = require('../../models/maleUser/BlockList');
+    const AgencyBlockList = require('../../models/agency/BlockList');
 
     // Only male → female case supported
     if (senderType === 'male' && receiverType === 'female') {
@@ -668,7 +666,57 @@ exports.getChatRooms = async (req, res) => {
     }));
 
     // Calculate unread counts for each room using the new unreadMap system
+    // Preload all blocked user IDs to improve performance
+    const { isBlocked } = require('../../services/blockService');
+    
+    // Preload all potential blocked users for this user
+    const FemaleBlockList = require('../../models/femaleUser/BlockList');
+    const MaleBlockList = require('../../models/maleUser/BlockList');
+    const AgencyBlockList = require('../../models/agency/BlockList');
+    
+    let blockedUserIds = [];
+    
+    if (userType === 'male') {
+      const blockedRecords = await MaleBlockList.find({ maleUserId: userId }).select('blockedUserId');
+      blockedUserIds = blockedRecords.map(record => record.blockedUserId.toString());
+      
+      // Also get users who blocked this user
+      const blockers = await MaleBlockList.find({ blockedUserId: userId }).select('maleUserId');
+      blockers.forEach(blocker => blockedUserIds.push(blocker.maleUserId.toString()));
+    } else if (userType === 'female') {
+      const blockedRecords = await FemaleBlockList.find({ femaleUserId: userId }).select('blockedUserId');
+      blockedUserIds = blockedRecords.map(record => record.blockedUserId.toString());
+      
+      // Also get users who blocked this user
+      const blockers = await FemaleBlockList.find({ blockedUserId: userId }).select('femaleUserId');
+      blockers.forEach(blocker => blockedUserIds.push(blocker.femaleUserId.toString()));
+    } else if (userType === 'agency') {
+      const blockedRecords = await AgencyBlockList.find({ agencyUserId: userId }).select('blockedUserId');
+      blockedUserIds = blockedRecords.map(record => record.blockedUserId.toString());
+      
+      // Also get users who blocked this user
+      const blockers = await AgencyBlockList.find({ blockedUserId: userId }).select('agencyUserId');
+      blockers.forEach(blocker => blockedUserIds.push(blocker.agencyUserId.toString()));
+    }
+    
+    // Create a Set for O(1) lookup
+    const blockedUserSet = new Set(blockedUserIds);
+    
+    // Get all potential other users from rooms for batch processing
     const roomsWithUnread = await Promise.all(populatedRooms.map(async (room) => {
+      // 🔒 CHECK IF CHAT IS BLOCKED BEFORE RETURNING
+      const otherParticipant = room.participants.find(p => p.userId && p.userId._id.toString() !== userId.toString());
+      
+      if (otherParticipant && otherParticipant.userId) {
+        // Use the preloaded blocked user set for O(1) lookup
+        const otherUserId = otherParticipant.userId._id.toString();
+        
+        if (blockedUserSet.has(otherUserId)) {
+          // Return null to indicate this room should be filtered out
+          return null;
+        }
+      }
+      
       // Convert room to plain object if it's a Mongoose document
       const roomObj = room.toObject ? room.toObject() : room;
 
@@ -699,8 +747,11 @@ exports.getChatRooms = async (req, res) => {
         unreadCount
       };
     }));
+    
+    // Filter out null rooms (blocked conversations)
+    const filteredRooms = roomsWithUnread.filter(room => room !== null);
 
-    res.json({ success: true, data: roomsWithUnread });
+    res.json({ success: true, data: filteredRooms });
   } catch (error) {
     console.error('Error getting chat rooms:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -723,6 +774,27 @@ exports.getMessages = async (req, res) => {
         success: false,
         message: 'Unauthorized access to chat room'
       });
+    }
+    
+    // 🔒 BLOCK CHECK FOR MESSAGE FETCHING
+    const otherUser = room.participants.find(
+      p => p.userId.toString() !== userId.toString()
+    );
+    
+    if (otherUser) {
+      const fetchPermission = await checkChatPermission(
+        userId,
+        req.userType,
+        otherUser.userId,
+        otherUser.userType
+      );
+      
+      if (!fetchPermission.allowed && fetchPermission.reason === 'BLOCKED_USER') {
+        return res.status(403).json({
+          success: false,
+          message: 'Chat is blocked'
+        });
+      }
     }
 
     const messages = await Message.find({
@@ -936,23 +1008,44 @@ exports.sendMessage = async (req, res) => {
           message: 'Unauthorized access to chat room'
         });
       }
+      
+      // 🔒 FINAL BLOCK CHECK FOR EXISTING ROOMS
+      const receiver = room.participants.find(
+        p => p.userId.toString() !== userId.toString()
+      );
+      
+      if (receiver) {
+        const receiverPermission = await checkChatPermission(
+          userId,
+          userType,
+          receiver.userId,
+          receiver.userType
+        );
+        
+        if (!receiverPermission.allowed && receiverPermission.reason === 'BLOCKED_USER') {
+          return res.status(403).json({
+            success: false,
+            message: 'You cannot send messages to this user because one of you has blocked the other'
+          });
+        }
+      }
     } else if (receiverId) {
       // For agencies, allow direct messaging to referred users by creating/getting room
       if (userType === 'agency') {
         // Validate that the sender can message this receiver
-        const permission = await checkChatPermission(
+        const agencyPermission = await checkChatPermission(
           userId,
           userType,
           receiverId,
           'female'
         );
 
-        if (!permission.allowed) {
+        if (!agencyPermission.allowed) {
           let message = 'You cannot send messages';
 
-          if (permission.reason === 'NOT_REFERRED_USER') {
+          if (agencyPermission.reason === 'NOT_REFERRED_USER') {
             message = 'You can only chat with users you have referred';
-          } else if (permission.reason === 'FEMALE_USER_NOT_FOUND') {
+          } else if (agencyPermission.reason === 'FEMALE_USER_NOT_FOUND') {
             message = 'Female user not found';
           } else {
             message = 'Unauthorized to send message to this user';
@@ -978,6 +1071,21 @@ exports.sendMessage = async (req, res) => {
               { userId: userId, userType: userType }
             ],
             roomKey
+          });
+        }
+        
+        // 🔒 FINAL BLOCK CHECK FOR NEWLY CREATED ROOMS
+        const newRoomPermission = await checkChatPermission(
+          userId,
+          userType,
+          receiverId,
+          'female'
+        );
+        
+        if (!newRoomPermission.allowed && newRoomPermission.reason === 'BLOCKED_USER') {
+          return res.status(403).json({
+            success: false,
+            message: 'You cannot send messages to this user because one of you has blocked the other'
           });
         }
       } else {
@@ -1061,17 +1169,27 @@ exports.sendMessage = async (req, res) => {
     // Send notification to the other user
     const otherUser = room.participants.find(participant => participant.userId.toString() !== userId.toString());
     if (otherUser) {
-      // Send notification asynchronously (don't wait for it to complete)
-      sendChatNotification(
-        userId,           // senderId
-        userType,         // senderType  
-        otherUser.userId, // receiverId
-        otherUser.userType, // receiverType
-        message,          // messageData
-        roomId            // roomId
-      ).catch(err => {
-        console.error('Failed to send notification:', err);
-      });
+      // Check if users are blocked before sending notification
+      const blockResult = await isBlocked(
+        userId,
+        userType,
+        otherUser.userId,
+        otherUser.userType
+      );
+      
+      if (!blockResult.isBlocked) {
+        // Send notification asynchronously (don't wait for it to complete)
+        sendChatNotification(
+          userId,           // senderId
+          userType,         // senderType  
+          otherUser.userId, // receiverId
+          otherUser.userType, // receiverType
+          message,          // messageData
+          roomId            // roomId
+        ).catch(err => {
+          console.error('Failed to send notification:', err);
+        });
+      }
     }
 
     res.json({ success: true, data: message });

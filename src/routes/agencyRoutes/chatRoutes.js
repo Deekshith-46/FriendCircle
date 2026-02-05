@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const chatController = require('../../controllers/agencyControllers/chatController');
 const auth = require('../../middlewares/authMiddleware');
+const { preventBlockedInteraction } = require('../../middlewares/blockMiddleware');
 
 // Get list of female users referred by the agency
 router.get('/referred-users', auth, chatController.getReferredFemaleUsers);
@@ -13,7 +14,7 @@ router.get('/rooms', auth, chatController.getChatRooms);
 router.post('/room', auth, chatController.getOrCreateChatRoom);
 
 // Send a message
-router.post('/send-message', auth, chatController.sendMessage);
+router.post('/send-message', auth, preventBlockedInteraction, chatController.sendMessage);
 
 // Get chat history
 router.get('/chat-history', auth, chatController.getChatHistory);

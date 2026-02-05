@@ -25,7 +25,7 @@ exports.blockUser = async (req, res) => {
 
     // Check if the female user is referred by this agency
     const isReferredByAgency = femaleUser.referredByAgency && 
-      femaleUser.referredByAgency.some(agency => agency.toString() === req.user._id.toString());
+      femaleUser.referredByAgency.toString() === req.user._id.toString();
     
     if (!isReferredByAgency) {
       return res.status(403).json({

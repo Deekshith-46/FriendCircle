@@ -20,9 +20,9 @@ const processReferralBonus = async (user, userType) => {
     
     if (userType === 'female') {
       hasReferral = (user.referredByFemale && user.referredByFemale.length > 0) || 
-                   (user.referredByAgency && user.referredByAgency.length > 0);
-    } else if (userType === 'agency') {
-      hasReferral = user.referredByAgency && user.referredByAgency.length > 0;
+                   (user.referredByAgency && user.referredByAgency !== null);
+    } else if (userType === agency) {
+      hasReferral = user.referredByAgency && user.referredByAgency !== null;
     } else if (userType === 'male') {
       hasReferral = user.referredBy && user.referredBy.length > 0;
     }
@@ -51,8 +51,8 @@ const processReferralBonus = async (user, userType) => {
           referredUserBonusAmount = femaleBonus;
           bonusType = 'wallet';
         }
-      } else if (user.referredByAgency && user.referredByAgency.length > 0) { // Referred by Agency
-        referrer = await AgencyUser.findById(user.referredByAgency[0]);
+      } else if (user.referredByAgency) { // Referred by Agency
+        referrer = await AgencyUser.findById(user.referredByAgency);
         if (referrer) {
           // Agency gets agencyReferralBonus, Female gets femaleReferralBonus
           const agencyBonus = config.agencyReferralBonus;
@@ -65,8 +65,8 @@ const processReferralBonus = async (user, userType) => {
       }
     } else if (userType === 'agency') {
       // Agency user - can only be referred by Agency
-      if (user.referredByAgency && user.referredByAgency.length > 0) {
-        referrer = await AgencyUser.findById(user.referredByAgency[0]);
+      if (user.referredByAgency) {
+        referrer = await AgencyUser.findById(user.referredByAgency);
         if (referrer) {
           // Both referrer and referred get agencyReferralBonus
           const agencyBonus = config.agencyReferralBonus;

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../../middlewares/authMiddleware');
+const { preventBlockedInteraction } = require('../../middlewares/blockMiddleware');
 const chatController = require('../../controllers/common/chatController');
 const { parser } = require('../../config/multer');
 
@@ -11,7 +12,7 @@ router.post('/upload', auth, parser.single('file'), chatController.uploadMedia);
 router.get('/uploads', auth, chatController.getUploadedMedia);
 
 // Start chat (mutual follow validation)
-router.post('/start', auth, chatController.startChat);
+router.post('/start', auth, preventBlockedInteraction, chatController.startChat);
 
 // Get chat rooms for user
 router.get('/rooms', auth, chatController.getChatRooms);
@@ -20,7 +21,7 @@ router.get('/rooms', auth, chatController.getChatRooms);
 router.get('/:roomId/messages', auth, chatController.getMessages);
 
 // Send message
-router.post('/send', auth, chatController.sendMessage);
+router.post('/send', auth, preventBlockedInteraction, chatController.sendMessage);
 
 // Delete message for user
 router.delete('/message/:messageId', auth, chatController.deleteMessage);

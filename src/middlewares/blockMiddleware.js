@@ -2,52 +2,18 @@ const MaleBlockList = require('../models/maleUser/BlockList');
 const FemaleBlockList = require('../models/femaleUser/BlockList');
 const AgencyBlockList = require('../models/agency/BlockList');
 const messages = require('../validations/messages');
+const { isBlocked } = require('../services/blockService');
 
 // Middleware to check if users have blocked each other
 const checkBlockStatus = async (userId, targetUserId, userType, targetUserType) => {
   try {
-    // Check if user has blocked target
-    let block1, block2;
-    
-    if (userType === 'male') {
-      block1 = await MaleBlockList.findOne({ 
-        maleUserId: userId, 
-        blockedUserId: targetUserId 
-      });
-    } else if (userType === 'female') {
-      block1 = await FemaleBlockList.findOne({ 
-        femaleUserId: userId, 
-        blockedUserId: targetUserId 
-      });
-    } else if (userType === 'agency') {
-      block1 = await AgencyBlockList.findOne({ 
-        agencyUserId: userId, 
-        blockedUserId: targetUserId 
-      });
-    }
-    
-    // Check if target has blocked user
-    if (targetUserType === 'male') {
-      block2 = await MaleBlockList.findOne({ 
-        maleUserId: targetUserId, 
-        blockedUserId: userId 
-      });
-    } else if (targetUserType === 'female') {
-      block2 = await FemaleBlockList.findOne({ 
-        femaleUserId: targetUserId, 
-        blockedUserId: userId 
-      });
-    } else if (targetUserType === 'agency') {
-      block2 = await AgencyBlockList.findOne({ 
-        agencyUserId: targetUserId, 
-        blockedUserId: userId 
-      });
-    }
+    // Use the new block service
+    const result = await isBlocked(userId, userType, targetUserId, targetUserType);
     
     return {
-      userBlockedTarget: !!block1,
-      targetBlockedUser: !!block2,
-      isBlocked: !!(block1 || block2)
+      userBlockedTarget: result.userBlockedOther,
+      targetBlockedUser: result.otherBlockedUser,
+      isBlocked: result.isBlocked
     };
   } catch (err) {
     console.error('Error checking block status:', err);

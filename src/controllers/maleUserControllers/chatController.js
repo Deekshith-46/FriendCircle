@@ -4,6 +4,7 @@ const MaleUser = require('../../models/maleUser/MaleUser');
 const FemaleUser = require('../../models/femaleUser/FemaleUser');
 const { isValidEmail, isValidMobile } = require('../../validations/validations');
 const messages = require('../../validations/messages');
+const { isBlocked } = require('../../services/blockService');
 
 // Send a message
 exports.sendMessage = async (req, res) => {

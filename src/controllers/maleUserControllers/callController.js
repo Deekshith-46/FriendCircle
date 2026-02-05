@@ -87,7 +87,7 @@ exports.startCall = async (req, res) => {
     const femaleRatePerSecond = femaleRatePerMinute / 60;
     
     // Determine if female belongs to agency
-    const isAgencyFemale = receiver.referredByAgency && receiver.referredByAgency.length > 0;
+    const isAgencyFemale = receiver.referredByAgency && receiver.referredByAgency !== null;
     
     // Get platform margin per minute and convert to per second
     const platformMarginPerMinute = 
@@ -482,8 +482,8 @@ exports.endCall = async (req, res) => {
     // Future enhancement: create separate admin revenue tracking model
     
     // Create transaction for agency commission and update agency wallet (if applicable)
-    if (agencyEarned > 0 && receiver.referredByAgency && receiver.referredByAgency.length > 0) {
-      const agencyUserId = receiver.referredByAgency[0]; // Get first agency
+    if (agencyEarned > 0 && receiver.referredByAgency) {
+      const agencyUserId = receiver.referredByAgency; // Get agency
       
       // Update agency wallet balance
       const AgencyUser = require('../../models/agency/AgencyUser');

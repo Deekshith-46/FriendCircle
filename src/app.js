@@ -57,7 +57,7 @@ app.use('/female-user/chat', require('./routes/femaleUserRoutes/chatRoutes'));  
 app.use('/female-user/earnings', require('./routes/femaleUserRoutes/earningsRoutes'));  // Female User Earnings
 app.use('/female-user/kyc', require('./routes/femaleUserRoutes/kycRoutes'));  // KYC Routes
 app.use('/female-user/withdrawals', require('./routes/femaleUserRoutes/withdrawalRoutes'));  // Withdrawal Routes
-app.use('/female-user/blocklist', require('./routes/femaleUserRoutes/blockListRoutes'));  // Blocklist Routes
+app.use('/female-user/block-list', require('./routes/femaleUserRoutes/blockListRoutes'));  // Blocklist Routes
 app.use('/female-user', require('./routes/femaleUserRoutes/scoreRoutes'));  // Score Routes (mounted directly under /female-user)
 app.use('/female-user', require('./routes/femaleUserRoutes/deleteAccountRoutes')); // Female User Delete Account
 
@@ -67,7 +67,7 @@ app.use('/male-user', require('./routes/maleUserRoutes/deleteAccountRoutes')); /
 // Routes for Male User
 app.use('/male-user/favourites', require('./routes/maleUserRoutes/favouritesRoutes'));  // Favourites Routes
 app.use('/male-user/chat', require('./routes/maleUserRoutes/chatRoutes')); // Chat Routes
-app.use('/male-user/blocklist', require('./routes/maleUserRoutes/blockListRoutes')); // Block List Routes
+app.use('/male-user/block-list', require('./routes/maleUserRoutes/blockListRoutes')); // Block List Routes
 app.use('/male-user/profile', require('./routes/maleUserRoutes/profileRoutes')); // Profile Routes
 app.use('/male-user/payment', require('./routes/maleUserRoutes/paymentRoutes')); // Payment Routes
 app.use('/male-user/gifts', require('./routes/maleUserRoutes/giftRoutes')); // Gift Routes

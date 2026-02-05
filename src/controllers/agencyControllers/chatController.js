@@ -4,6 +4,7 @@ const FemaleUser = require('../../models/femaleUser/FemaleUser');
 const FemaleImage = require('../../models/femaleUser/Image');
 const AgencyUser = require('../../models/agency/AgencyUser');
 const { checkBlockStatus } = require('../../middlewares/blockMiddleware');
+const { isBlocked } = require('../../services/blockService');
 
 // Create or get chat room between agency and female user
 const getOrCreateChatRoom = async (agencyId, femaleId) => {
@@ -56,18 +57,29 @@ exports.sendMessage = async (req, res) => {
       });
     }
 
-    // Check if either user has blocked the other
-    const blockStatus = await checkBlockStatus(req.user._id, receiverId, 'agency', 'female');
-    
-    if (blockStatus.isBlocked) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Blocked users cannot send messages to each other.' 
-      });
-    }
-
     // Create or get chat room
     const chatRoom = await getOrCreateChatRoom(req.user._id, receiverId);
+    
+    // 🔒 FINAL BLOCK CHECK FOR EXISTING ROOMS (real-time check)
+    const otherUser = chatRoom.participants.find(
+      p => p.userId.toString() !== req.user._id.toString()
+    );
+    
+    if (otherUser) {
+      const blockResult = await isBlocked(
+        req.user._id, 
+        'agency', 
+        otherUser.userId, 
+        otherUser.userType
+      );
+      
+      if (blockResult.isBlocked) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Blocked users cannot send messages to each other.' 
+        });
+      }
+    }
 
     // Create message
     const message = new Message({
@@ -120,18 +132,29 @@ exports.getChatHistory = async (req, res) => {
       });
     }
 
-    // Check if either user has blocked the other
-    const blockStatus = await checkBlockStatus(req.user._id, receiverId, 'agency', 'female');
-    
-    if (blockStatus.isBlocked) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Blocked users cannot view chat history.' 
-      });
-    }
-
     // Create or get chat room
     const chatRoom = await getOrCreateChatRoom(req.user._id, receiverId);
+    
+    // 🔒 BLOCK CHECK FOR MESSAGE FETCHING (real-time check)
+    const otherUser = chatRoom.participants.find(
+      p => p.userId.toString() !== req.user._id.toString()
+    );
+    
+    if (otherUser) {
+      const blockResult = await isBlocked(
+        req.user._id, 
+        'agency', 
+        otherUser.userId, 
+        otherUser.userType
+      );
+      
+      if (blockResult.isBlocked) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Blocked users cannot view chat history.' 
+        });
+      }
+    }
 
     // Get messages
     const messages = await Message.find({ chatRoomId: chatRoom._id })
@@ -324,8 +347,36 @@ exports.getChatRooms = async (req, res) => {
       'participants.userType': 'agency'
     }).populate('participants.userId', 'name images onlineStatus');
 
+    // Preload all blocked user IDs to improve performance
+    const FemaleBlockList = require('../../models/femaleUser/BlockList');
+    const MaleBlockList = require('../../models/maleUser/BlockList');
+    const AgencyBlockList = require('../../models/agency/BlockList');
+    
+    const blockedRecords = await AgencyBlockList.find({ agencyUserId: req.user._id }).select('blockedUserId');
+    const blockedUserIds = blockedRecords.map(record => record.blockedUserId.toString());
+    
+    // Also get users who blocked this user
+    const blockers = await AgencyBlockList.find({ blockedUserId: req.user._id }).select('agencyUserId');
+    blockers.forEach(blocker => blockedUserIds.push(blocker.agencyUserId.toString()));
+    
+    // Create a Set for O(1) lookup
+    const blockedUserSet = new Set(blockedUserIds);
+
     // Get the latest message for each chat room
     const chatRoomsWithLatestMessage = await Promise.all(chatRooms.map(async (room) => {
+      // 🔒 CHECK IF CHAT IS BLOCKED BEFORE RETURNING
+      const otherParticipant = room.participants.find(p => p.userId.toString() !== req.user._id.toString());
+      
+      if (otherParticipant) {
+        // Use the preloaded blocked user set for O(1) lookup
+        const otherUserId = otherParticipant.userId ? otherParticipant.userId._id.toString() : otherParticipant.userId;
+        
+        if (blockedUserSet.has(otherUserId)) {
+          // Skip this room if blocked
+          return null;
+        }
+      }
+      
       const latestMessage = await Message.findOne({ chatRoomId: room._id })
         .sort({ createdAt: -1 })
         .limit(1);
@@ -356,9 +407,12 @@ exports.getChatRooms = async (req, res) => {
         createdAt: room.createdAt
       };
     }));
+    
+    // Filter out null rooms (blocked conversations)
+    const filteredChatRooms = chatRoomsWithLatestMessage.filter(room => room !== null);
 
     // Sort by last message time (newest first)
-    const sortedChatRooms = chatRoomsWithLatestMessage.sort((a, b) => 
+    const sortedChatRooms = filteredChatRooms.sort((a, b) => 
       new Date(b.lastMessageAt || b.createdAt) - new Date(a.lastMessageAt || a.createdAt)
     );
 

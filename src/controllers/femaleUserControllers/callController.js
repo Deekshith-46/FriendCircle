@@ -424,8 +424,8 @@ exports.endCall = async (req, res) => {
     // Future enhancement: create separate admin revenue tracking model
     
     // Create transaction for agency commission and update agency wallet (if applicable)
-    if (agencyEarned > 0 && receiver.referredByAgency && receiver.referredByAgency.length > 0) {
-      const agencyUserId = receiver.referredByAgency[0]; // Get first agency
+    if (agencyEarned > 0 && receiver.referredByAgency) {
+      const agencyUserId = receiver.referredByAgency; // Get agency
       
       // Update agency wallet balance
       const AgencyUser = require('../../models/agency/AgencyUser');

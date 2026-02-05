@@ -41,22 +41,6 @@ const handleAccountApproved = async (payload) => {
   };
 };
 
-const handleAccountRejected = async (payload) => {
-  const { userId, userType } = payload;
-  const entityId = payload.entityId || userId;
-  const entityType = payload.entityType || userType;
-  
-  return {
-    receiverId: userId,
-    receiverType: userType,
-    title: 'Account Rejected',
-    message: 'Your account has been rejected. Please contact support for more information.',
-    type: notificationEvents.ACCOUNT_REJECTED,
-    data: { userId, userType, rejectedBy: payload.rejectedBy },
-    priority: 'medium'
-  };
-};
-
 const handleKYCSubmitted = async (payload) => {
   const { userId, userType } = payload;
   const entityId = payload.entityId || userId;
@@ -145,10 +129,6 @@ const handleEvent = async (eventType, payload) => {
         notificationData = await handleAccountApproved(payload);
         break;
         
-      case notificationEvents.ACCOUNT_REJECTED:
-        notificationData = await handleAccountRejected(payload);
-        break;
-        
       case notificationEvents.KYC_SUBMITTED:
         notificationData = await handleKYCSubmitted(payload);
         break;
@@ -183,7 +163,6 @@ module.exports = {
   handleEvent,
   handleAccountApprovalRequest,
   handleAccountApproved,
-  handleAccountRejected,
   handleKYCSubmitted,
   handleKYCProcessed,
   handleWithdrawalRequest,
