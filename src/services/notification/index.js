@@ -27,19 +27,25 @@ const notificationService = {
       return false;
     }
     
-    // Step 2: Save to database
-    const notificationId = await saveNotification(
-      notificationData.receiverId,
-      notificationData.receiverType,
-      notificationData.title,
-      notificationData.message,
-      notificationData.type,
-      notificationData.data,
-      notificationData.priority
-    );
+    // Step 2: Save to database (skip for admin-wide notifications)
+    let notificationId = null;
+    let dbSaveSuccess = true;
     
-    if (!notificationId) {
-      return false;
+    if (!(notificationData.receiverType === 'admin' && notificationData.receiverId === null)) {
+      notificationId = await saveNotification(
+        notificationData.receiverId,
+        notificationData.receiverType,
+        notificationData.title,
+        notificationData.message,
+        notificationData.type,
+        notificationData.data,
+        notificationData.priority
+      );
+      
+      if (!notificationId) {
+        dbSaveSuccess = false;
+        console.warn('Warning: Failed to save notification to database, but continuing with socket delivery');
+      }
     }
     
     // Step 3: Deliver via appropriate channels
@@ -78,7 +84,8 @@ const notificationService = {
       false // userActiveInRoom = false for event notifications
     );
     
-    return deliveryResult.db !== false;
+    // Return success if either DB save succeeded OR socket delivery succeeded
+    return dbSaveSuccess || (deliveryResult.socket && deliveryResult.socket.delivered);
   },
   
   // Direct delivery method for immediate notifications

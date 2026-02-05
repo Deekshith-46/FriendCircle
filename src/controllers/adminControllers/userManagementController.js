@@ -277,7 +277,7 @@ exports.reviewRegistration = async (req, res) => {
             {
                 userId: user._id,
                 userType: userType,
-                processedBy: req.admin?._id || req.staff?._id,
+                [reviewStatus === 'accepted' ? 'approvedBy' : 'rejectedBy']: req.admin?._id || req.staff?._id,
                 status: reviewStatus
             }
         );
