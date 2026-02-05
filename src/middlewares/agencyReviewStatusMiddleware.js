@@ -85,7 +85,8 @@ const allowOnlyAgencyCompleteProfile = (req, res, next) => {
     });
   }
 
-  if (req.user.reviewStatus !== 'completeProfile') {
+  // Allow access for both 'completeProfile' status (initial completion) and 'rejected' status (resubmission)
+  if (req.user.reviewStatus !== 'completeProfile' && req.user.reviewStatus !== 'rejected') {
     return res.status(403).json({
       success: false,
       message: 'Profile already completed or under review.',

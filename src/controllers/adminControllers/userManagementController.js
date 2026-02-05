@@ -266,8 +266,21 @@ exports.reviewRegistration = async (req, res) => {
         
         const oldReviewStatus = userBeforeUpdate.reviewStatus;
         
+        // Prepare update data
+        const updateData = { reviewStatus };
+        
+        // If rejection, include rejection reason
+        if (reviewStatus === 'rejected') {
+            const { rejectionReason } = req.body;
+            if (rejectionReason) {
+                updateData.rejectionReason = rejectionReason;
+            }
+            // Also reset profileCompleted to allow resubmission
+            updateData.profileCompleted = false;
+        }
+        
         // Update the review status
-        const user = await Model.findByIdAndUpdate(userId, { reviewStatus }, { new: true });
+        const user = await Model.findByIdAndUpdate(userId, updateData, { new: true });
         
         // 🔥 FIRING NOTIFICATION EVENT
         await notificationService.handleEvent(
@@ -278,7 +291,8 @@ exports.reviewRegistration = async (req, res) => {
                 userId: user._id,
                 userType: userType,
                 [reviewStatus === 'accepted' ? 'approvedBy' : 'rejectedBy']: req.admin?._id || req.staff?._id,
-                status: reviewStatus
+                status: reviewStatus,
+                ...(reviewStatus === 'rejected' && req.body.rejectionReason && { rejectionReason: req.body.rejectionReason })
             }
         );
         
@@ -501,6 +515,8 @@ exports.reviewKYC = async (req, res) => {
                 
                 if (!hasAcceptedMethod) {
                     user.kycStatus = 'rejected';
+                    // If all methods are rejected, also reset profileCompleted to allow resubmission
+                    user.profileCompleted = false;
                 }
                 
                 await user.save();
@@ -611,6 +627,8 @@ exports.reviewKYC = async (req, res) => {
                 
                 if (!hasAcceptedMethod) {
                     user.kycStatus = 'rejected';
+                    // If all methods are rejected, also reset profileCompleted to allow resubmission
+                    user.profileCompleted = false;
                 }
                 
                 await user.save();
@@ -639,12 +657,14 @@ exports.listPendingRegistrations = async (req, res) => {
     try {
         const { userType } = req.query; // 'female' | 'agency' | undefined (all)
         let data = {};
+        
         if (!userType || userType === 'female') {
-            data.females = await FemaleUser.find({ reviewStatus: 'pending' }).select('-otp -passwordHash');
+            data.females = await FemaleUser.find({ reviewStatus: 'pending' }).select('_id name email mobileNumber images videoUrl bio age gender createdAt updatedAt reviewStatus kycStatus rejectionReason');
         }
         if (!userType || userType === 'agency') {
-            data.agencies = await AgencyUser.find({ reviewStatus: 'pending' }).select('-otp');
+            data.agencies = await AgencyUser.find({ reviewStatus: 'pending' }).select('_id firstName lastName email mobileNumber image createdAt updatedAt reviewStatus rejectionReason');
         }
+        
         return res.json({ success: true, data });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });

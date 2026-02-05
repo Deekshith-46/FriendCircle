@@ -40,6 +40,7 @@ const femaleUserSchema = new mongoose.Schema({
   }],
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   reviewStatus: { type: String, enum: ['completeProfile', 'pending', 'accepted', 'rejected'], default: 'completeProfile' },
+  rejectionReason: { type: String }, // Reason for rejection when reviewStatus is 'rejected'
   isVerified: { type: Boolean, default: false },
   isActive: { type: Boolean, default: false }, // Only true after OTP verification
   profileCompleted: { type: Boolean, default: false }, // True only after user completes profile with all details

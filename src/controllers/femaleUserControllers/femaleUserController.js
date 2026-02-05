@@ -805,11 +805,18 @@ exports.completeUserProfile = async (req, res) => {
       }
 
       // Check if profile is already completed
-      if (user.profileCompleted) {
+      // Allow resubmission if user was rejected
+      if (user.profileCompleted && user.reviewStatus !== 'rejected') {
         return res.status(400).json({ 
           success: false, 
           message: messages.REGISTRATION.PROFILE_COMPLETED
         });
+      }
+      
+      // If user was rejected, allow them to resubmit by resetting their status
+      if (user.reviewStatus === 'rejected') {
+        // Clear rejection reason since user is resubmitting
+        user.rejectionReason = undefined;
       }
     } catch (dbErr) {
       console.error('Database error in completeUserProfile:', dbErr);

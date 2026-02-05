@@ -58,13 +58,21 @@ const handleAccountRejected = async (payload) => {
     return null;
   }
   
+  // Build message based on whether a rejection reason was provided
+  let message = 'Your account has been rejected. Please contact support for more information.';
+  if (payload.rejectionReason) {
+    message = `Your account has been rejected. Reason: ${payload.rejectionReason}. Please resubmit with proper details.`;
+  } else {
+    message = 'Your account has been rejected. Please resubmit with proper details.';
+  }
+  
   return {
     receiverId: userId,
     receiverType: userType,
     title: 'Account Rejected',
-    message: 'Your account has been rejected. Please contact support for more information.',
+    message,
     type: notificationEvents.ACCOUNT_REJECTED,
-    data: { userId, userType, rejectedBy: payload.rejectedBy },
+    data: { userId, userType, rejectedBy: payload.rejectedBy, rejectionReason: payload.rejectionReason },
     priority: 'medium'
   };
 };

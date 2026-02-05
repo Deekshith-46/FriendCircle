@@ -297,8 +297,15 @@ exports.completeAgencyProfile = async (req, res) => {
       return res.status(404).json({ success: false, message: messages.COMMON.USER_NOT_FOUND });
     }
 
-    if (agency.profileCompleted) {
+    // Allow resubmission if agency was rejected
+    if (agency.profileCompleted && agency.reviewStatus !== 'rejected') {
       return res.status(400).json({ success: false, message: 'Profile already completed' });
+    }
+    
+    // If agency was rejected, allow them to resubmit by clearing the rejection reason
+    if (agency.reviewStatus === 'rejected') {
+      // Clear rejection reason since agency is resubmitting
+      agency.rejectionReason = undefined;
     }
 
     const cleanedFirstName = cleanValue(firstName);

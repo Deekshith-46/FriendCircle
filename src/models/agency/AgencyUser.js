@@ -22,6 +22,7 @@ const agencyUserSchema = new mongoose.Schema({
 	status: { type: String, enum: ['active', 'inactive'], default: 'inactive' },
 	profileCompleted: { type: Boolean, default: false },
 	reviewStatus: { type: String, enum: ['completeProfile', 'pending', 'accepted', 'rejected'], default: 'completeProfile' },
+	rejectionReason: { type: String }, // Reason for rejection when reviewStatus is 'rejected'
 	kycStatus: { type: String, enum: ['completeKyc', 'pending', 'accepted', 'rejected'], default: 'completeKyc' },
 	kycDetails: { 
 	  bank: {
