@@ -3,7 +3,7 @@ const Message = require('../../models/chat/Message');
 const FemaleUser = require('../../models/femaleUser/FemaleUser');
 const MaleUser = require('../../models/maleUser/MaleUser');
 const { messages } = require('../../validations/messages');
-const { sendChatMessageNotification } = require('../../services/notificationService');
+const { sendChatNotification } = require('../../services/notificationService');
 
 // Helper function to check chat permissions
 const checkChatPermission = async (senderId, senderType, receiverId, receiverType) => {
@@ -72,7 +72,7 @@ const checkChatPermission = async (senderId, senderType, receiverId, receiverTyp
       }
 
       const isReferredByAgency = femaleUser.referredByAgency &&
-        femaleUser.referredByAgency.some(agency => agency.toString() === senderId.toString());
+        femaleUser.referredByAgency.toString() === senderId.toString();
 
       if (!isReferredByAgency) {
         return {
@@ -1062,12 +1062,13 @@ exports.sendMessage = async (req, res) => {
     const otherUser = room.participants.find(participant => participant.userId.toString() !== userId.toString());
     if (otherUser) {
       // Send notification asynchronously (don't wait for it to complete)
-      sendChatMessageNotification(
+      sendChatNotification(
         userId,           // senderId
         userType,         // senderType  
         otherUser.userId, // receiverId
         otherUser.userType, // receiverType
-        message           // messageData
+        message,          // messageData
+        roomId            // roomId
       ).catch(err => {
         console.error('Failed to send notification:', err);
       });
