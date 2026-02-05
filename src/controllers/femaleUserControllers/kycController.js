@@ -7,7 +7,7 @@ const messages = require('../../validations/messages');
 const notificationService = require('../../services/notificationService');
 const notificationEvents = require('../../constants/notificationEvents');
 
-// Submit KYC
+// Submit/Update KYC
 exports.submitKYC = async (req, res) => {
   const { method, accountDetails, upiId } = req.body;
   try {
@@ -28,8 +28,20 @@ exports.submitKYC = async (req, res) => {
       });
     }
 
-    const kyc = new KYC({ user: req.user.id, method, accountDetails, upiId });
-    await kyc.save();
+    // Update existing KYC record or create new one
+    let kyc = await KYC.findOne({ user: req.user.id, method });
+    
+    if (kyc) {
+      // Update existing record
+      kyc.accountDetails = accountDetails;
+      kyc.upiId = upiId;
+      kyc.status = 'pending'; // Reset status for re-verification
+      await kyc.save();
+    } else {
+      // Create new record
+      kyc = new KYC({ user: req.user.id, method, accountDetails, upiId });
+      await kyc.save();
+    }
 
     // Initialize kycDetails with new structure if it doesn't exist or has old structure
     if (!user.kycDetails || !user.kycDetails.bank || !user.kycDetails.upi) {
@@ -49,11 +61,6 @@ exports.submitKYC = async (req, res) => {
         status: 'pending',
         verifiedAt: null
       };
-
-      // Update overall kycStatus if no approved method exists
-      if (user.kycStatus === 'completeKyc') {
-        user.kycStatus = 'pending';
-      }
     }
 
     if (method === "upi_id" && upiId) {
@@ -64,12 +71,10 @@ exports.submitKYC = async (req, res) => {
         status: 'pending',
         verifiedAt: null
       };
-
-      // Update overall kycStatus if no approved method exists
-      if (user.kycStatus === 'completeKyc') {
-        user.kycStatus = 'pending';
-      }
     }
+
+    // ALWAYS force re-verification when something changes
+    user.kycStatus = 'pending';
 
     await user.save();
 
@@ -83,21 +88,518 @@ exports.submitKYC = async (req, res) => {
       }
     );
 
-    // Decide redirect page
-    let redirectTo = 'UNDER_REVIEW';
+    return res.status(200).json({
+      success: true,
+      message: 'Details submitted. Waiting for admin verification.',
+      redirectTo: 'UNDER_REVIEW'
+    });
 
-    if (user.kycStatus === 'accepted') {
-      redirectTo = 'VERIFICATION_DONE';
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Get current payout account details
+exports.getPayoutDetails = async (req, res) => {
+  try {
+    const user = await FemaleUser.findById(req.user.id).select('kycDetails kycStatus');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
     }
+    
+    const payoutDetails = {
+      kycStatus: user.kycStatus
+    };
+    
+    // Add bank details if they exist
+    if (user.kycDetails?.bank?._id) {
+      payoutDetails.bank = {
+        id: user.kycDetails.bank._id,
+        name: user.kycDetails.bank.name,
+        accountNumber: user.kycDetails.bank.accountNumber,
+        ifsc: user.kycDetails.bank.ifsc,
+        status: user.kycDetails.bank.status,
+        verifiedAt: user.kycDetails.bank.verifiedAt
+      };
+    }
+    
+    // Add UPI details if they exist
+    if (user.kycDetails?.upi?._id) {
+      payoutDetails.upi = {
+        id: user.kycDetails.upi._id,
+        upiId: user.kycDetails.upi.upiId,
+        status: user.kycDetails.upi.status,
+        verifiedAt: user.kycDetails.upi.verifiedAt
+      };
+    }
+    
+    // Determine redirect based on status
+    const redirectTo = user.kycStatus === 'accepted' ? 'VERIFICATION_DONE' : 'UNDER_REVIEW';
+    
+    return res.status(200).json({
+      success: true,
+      data: payoutDetails,
+      redirectTo
+    });
+    
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Add new bank account details (only if doesn't exist)
+exports.addBankAccount = async (req, res) => {
+  const { name, accountNumber, ifsc } = req.body;
+  try {
+    const user = await FemaleUser.findById(req.user.id);
+
+    // Check conditions for submitting KYC
+    if (!user.profileCompleted) {
+      return res.status(400).json({
+        success: false,
+        message: 'Profile must be completed before submitting KYC'
+      });
+    }
+
+    if (user.reviewStatus !== 'accepted') {
+      return res.status(400).json({
+        success: false,
+        message: 'Account must be approved before submitting KYC'
+      });
+    }
+
+    // Check if bank details already exist
+    if (user.kycDetails?.bank?._id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bank account details already exist. Please use PUT method to update.'
+      });
+    }
+
+    // Validate required fields
+    if (!name || !accountNumber || !ifsc) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, account number, and IFSC code are required'
+      });
+    }
+
+    // Check for existing KYC record
+    const existingKyc = await KYC.findOne({ user: req.user.id, method: 'account_details' });
+    if (existingKyc) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bank account details already exist. Please use PUT method to update.'
+      });
+    }
+
+    // Create new record
+    const kyc = new KYC({ user: req.user.id, method: 'account_details', accountDetails: { name, accountNumber, ifsc } });
+    await kyc.save();
+
+    // Initialize kycDetails with new structure if it doesn't exist or has old structure
+    if (!user.kycDetails || !user.kycDetails.bank || !user.kycDetails.upi) {
+      user.kycDetails = {
+        bank: {},
+        upi: {}
+      };
+    }
+
+    // Set bank details with pending status
+    user.kycDetails.bank = {
+      _id: new mongoose.Types.ObjectId(),
+      name: name,
+      accountNumber: accountNumber,
+      ifsc: ifsc,
+      status: 'pending',
+      verifiedAt: null
+    };
+
+    // Update overall kycStatus to pending since new details are added
+    user.kycStatus = 'pending';
+
+    await user.save();
+
+    // Notify admin about new KYC submission
+    notificationService.handleEvent(
+      notificationEvents.KYC_SUBMITTED,
+      {
+        entityId: req.user.id,
+        entityType: 'female',
+        method: 'account_details'
+      }
+    );
 
     return res.status(200).json({
       success: true,
-      message: user.kycStatus === 'accepted'
-        ? 'KYC already verified.'
-        : 'KYC submitted for verification.',
-      redirectTo
+      message: 'Bank account details submitted for verification.',
+      data: {
+        id: user.kycDetails.bank._id,
+        name,
+        accountNumber,
+        ifsc,
+        status: 'pending'
+      },
+      redirectTo: 'UNDER_REVIEW'
     });
 
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Update existing bank account details
+exports.updateBankAccount = async (req, res) => {
+  const { name, accountNumber, ifsc } = req.body;
+  try {
+    const user = await FemaleUser.findById(req.user.id);
+
+    // Check conditions for submitting KYC
+    if (!user.profileCompleted) {
+      return res.status(400).json({
+        success: false,
+        message: 'Profile must be completed before submitting KYC'
+      });
+    }
+
+    if (user.reviewStatus !== 'accepted') {
+      return res.status(400).json({
+        success: false,
+        message: 'Account must be approved before submitting KYC'
+      });
+    }
+
+    // Validate required fields
+    if (!name || !accountNumber || !ifsc) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, account number, and IFSC code are required'
+      });
+    }
+
+    // Update existing KYC record for bank details
+    let kyc = await KYC.findOne({ user: req.user.id, method: 'account_details' });
+    
+    if (!kyc) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bank account details not found'
+      });
+    }
+
+    // Update existing record
+    kyc.accountDetails = { name, accountNumber, ifsc };
+    kyc.status = 'pending'; // Reset status for re-verification
+    await kyc.save();
+
+    // Update user's kycDetails
+    user.kycDetails = user.kycDetails || { bank: {}, upi: {} };
+    user.kycDetails.bank = {
+      _id: user.kycDetails.bank._id,
+      name: name,
+      accountNumber: accountNumber,
+      ifsc: ifsc,
+      status: 'pending',
+      verifiedAt: null
+    };
+
+    // Update overall kycStatus to pending since details are updated
+    user.kycStatus = 'pending';
+
+    await user.save();
+
+    // Notify admin about KYC update
+    notificationService.handleEvent(
+      notificationEvents.KYC_SUBMITTED,
+      {
+        entityId: req.user.id,
+        entityType: 'female',
+        method: 'account_details'
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Bank account details updated and submitted for verification.',
+      data: {
+        id: user.kycDetails.bank._id,
+        name,
+        accountNumber,
+        ifsc,
+        status: 'pending'
+      },
+      redirectTo: 'UNDER_REVIEW'
+    });
+
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Get bank account details
+exports.getBankAccount = async (req, res) => {
+  try {
+    const user = await FemaleUser.findById(req.user.id).select('kycDetails kycStatus');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Check if bank details exist
+    if (!user.kycDetails?.bank?._id) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bank account details not found'
+      });
+    }
+    
+    const bankDetails = {
+      id: user.kycDetails.bank._id,
+      name: user.kycDetails.bank.name,
+      accountNumber: user.kycDetails.bank.accountNumber,
+      ifsc: user.kycDetails.bank.ifsc,
+      status: user.kycDetails.bank.status,
+      verifiedAt: user.kycDetails.bank.verifiedAt
+    };
+    
+    // Determine redirect based on status
+    const redirectTo = user.kycStatus === 'accepted' ? 'VERIFICATION_DONE' : 'UNDER_REVIEW';
+    
+    return res.status(200).json({
+      success: true,
+      data: bankDetails,
+      redirectTo
+    });
+    
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Add new UPI details (only if doesn't exist)
+exports.addUpiAccount = async (req, res) => {
+  const { upiId } = req.body;
+  try {
+    const user = await FemaleUser.findById(req.user.id);
+
+    // Check conditions for submitting KYC
+    if (!user.profileCompleted) {
+      return res.status(400).json({
+        success: false,
+        message: 'Profile must be completed before submitting KYC'
+      });
+    }
+
+    if (user.reviewStatus !== 'accepted') {
+      return res.status(400).json({
+        success: false,
+        message: 'Account must be approved before submitting KYC'
+      });
+    }
+
+    // Check if UPI details already exist
+    if (user.kycDetails?.upi?._id) {
+      return res.status(400).json({
+        success: false,
+        message: 'UPI details already exist. Please use PUT method to update.'
+      });
+    }
+
+    // Validate required field
+    if (!upiId) {
+      return res.status(400).json({
+        success: false,
+        message: 'UPI ID is required'
+      });
+    }
+
+    // Check for existing KYC record
+    const existingKyc = await KYC.findOne({ user: req.user.id, method: 'upi_id' });
+    if (existingKyc) {
+      return res.status(400).json({
+        success: false,
+        message: 'UPI details already exist. Please use PUT method to update.'
+      });
+    }
+
+    // Create new record
+    const kyc = new KYC({ user: req.user.id, method: 'upi_id', upiId });
+    await kyc.save();
+
+    // Initialize kycDetails with new structure if it doesn't exist or has old structure
+    if (!user.kycDetails || !user.kycDetails.bank || !user.kycDetails.upi) {
+      user.kycDetails = {
+        bank: {},
+        upi: {}
+      };
+    }
+
+    // Set UPI details with pending status
+    user.kycDetails.upi = {
+      _id: new mongoose.Types.ObjectId(),
+      upiId: upiId,
+      status: 'pending',
+      verifiedAt: null
+    };
+
+    // Update overall kycStatus to pending since new details are added
+    user.kycStatus = 'pending';
+
+    await user.save();
+
+    // Notify admin about new KYC submission
+    notificationService.handleEvent(
+      notificationEvents.KYC_SUBMITTED,
+      {
+        entityId: req.user.id,
+        entityType: 'female',
+        method: 'upi_id'
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'UPI details submitted for verification.',
+      data: {
+        id: user.kycDetails.upi._id,
+        upiId,
+        status: 'pending'
+      },
+      redirectTo: 'UNDER_REVIEW'
+    });
+
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Update existing UPI details
+exports.updateUpiAccount = async (req, res) => {
+  const { upiId } = req.body;
+  try {
+    const user = await FemaleUser.findById(req.user.id);
+
+    // Check conditions for submitting KYC
+    if (!user.profileCompleted) {
+      return res.status(400).json({
+        success: false,
+        message: 'Profile must be completed before submitting KYC'
+      });
+    }
+
+    if (user.reviewStatus !== 'accepted') {
+      return res.status(400).json({
+        success: false,
+        message: 'Account must be approved before submitting KYC'
+      });
+    }
+
+    // Validate required field
+    if (!upiId) {
+      return res.status(400).json({
+        success: false,
+        message: 'UPI ID is required'
+      });
+    }
+
+    // Update existing KYC record for UPI details
+    let kyc = await KYC.findOne({ user: req.user.id, method: 'upi_id' });
+    
+    if (!kyc) {
+      return res.status(404).json({
+        success: false,
+        message: 'UPI details not found'
+      });
+    }
+
+    // Update existing record
+    kyc.upiId = upiId;
+    kyc.status = 'pending'; // Reset status for re-verification
+    await kyc.save();
+
+    // Update user's kycDetails
+    user.kycDetails = user.kycDetails || { bank: {}, upi: {} };
+    user.kycDetails.upi = {
+      _id: user.kycDetails.upi._id,
+      upiId: upiId,
+      status: 'pending',
+      verifiedAt: null
+    };
+
+    // Update overall kycStatus to pending since details are updated
+    user.kycStatus = 'pending';
+
+    await user.save();
+
+    // Notify admin about KYC update
+    notificationService.handleEvent(
+      notificationEvents.KYC_SUBMITTED,
+      {
+        entityId: req.user.id,
+        entityType: 'female',
+        method: 'upi_id'
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'UPI details updated and submitted for verification.',
+      data: {
+        id: user.kycDetails.upi._id,
+        upiId,
+        status: 'pending'
+      },
+      redirectTo: 'UNDER_REVIEW'
+    });
+
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Get UPI details
+exports.getUpiAccount = async (req, res) => {
+  try {
+    const user = await FemaleUser.findById(req.user.id).select('kycDetails kycStatus');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Check if UPI details exist
+    if (!user.kycDetails?.upi?._id) {
+      return res.status(404).json({
+        success: false,
+        message: 'UPI details not found'
+      });
+    }
+    
+    const upiDetails = {
+      id: user.kycDetails.upi._id,
+      upiId: user.kycDetails.upi.upiId,
+      status: user.kycDetails.upi.status,
+      verifiedAt: user.kycDetails.upi.verifiedAt
+    };
+    
+    // Determine redirect based on status
+    const redirectTo = user.kycStatus === 'accepted' ? 'VERIFICATION_DONE' : 'UNDER_REVIEW';
+    
+    return res.status(200).json({
+      success: true,
+      data: upiDetails,
+      redirectTo
+    });
+    
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -143,13 +645,21 @@ exports.verifyKYC = async (req, res) => {
     }
 
     // Update overall KYC status based on all methods
-    if (status === 'approved') {
-      user.kycStatus = 'accepted';
-    } else if (status === 'rejected') {
-      user.kycStatus = 'rejected';
+    if (status === 'approved' || status === 'rejected') {
+      // Calculate overall kycStatus based on all payout methods
+      const hasAcceptedMethod = (user.kycDetails.bank?.status === 'accepted' || 
+                               user.kycDetails.upi?.status === 'accepted');
+      const hasPendingMethod = (user.kycDetails.bank?.status === 'pending' || 
+                               user.kycDetails.upi?.status === 'pending');
+      
+      // If any method is pending, overall status is pending for review
+      user.kycStatus = hasPendingMethod ? 'pending' : (hasAcceptedMethod ? 'accepted' : 'pending');
     } else {
       user.kycStatus = 'pending';
     }
+
+    // Determine redirect page based on status
+    const redirectTo = status === 'approved' ? 'APPROVED' : 'UNDER_REVIEW';
 
     await user.save();
 
@@ -164,7 +674,12 @@ exports.verifyKYC = async (req, res) => {
       }
     );
 
-    res.json({ success: true, data: kyc });
+    res.json({ 
+      success: true, 
+      data: kyc,
+      message: status === 'approved' ? 'KYC approved successfully' : 'KYC rejected',
+      redirectTo
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

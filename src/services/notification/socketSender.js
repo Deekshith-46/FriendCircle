@@ -4,17 +4,16 @@ const { getSocketIdForUser, getIO } = require('../../socketInstance');
 // Send socket notification to specific user
 const sendSocketNotification = async (userId, userType, event, data) => {
   try {
-    const socketId = getSocketIdForUser(userId, userType);
-
-    if (socketId) {
-      // Emit via global socket.io instance
-      const { getIO } = require('../../socketInstance');
-      const io = getIO();
-      if (io) {
-        io.to(socketId).emit(event, data);
-        console.log(`Socket notification sent to user ${userId} (${userType}):`, event);
-        return { delivered: true, via: 'socket', socketId: socketId };
-      }
+    // Emit to user's notification room instead of socketId
+    const room = `${userType}_${userId}`;
+    
+    // Emit via global socket.io instance
+    const { getIO } = require('../../socketInstance');
+    const io = getIO();
+    if (io) {
+      io.to(room).emit(event, data);
+      console.log(`Socket notification sent to room ${room}:`, event);
+      return { delivered: true, via: 'socket', room: room };
     }
 
     return { delivered: false, via: 'none' };
@@ -27,24 +26,19 @@ const sendSocketNotification = async (userId, userType, event, data) => {
 // Send notification with delivery intent logic (Issue 3 fix)
 const sendNotificationWithIntent = async (userId, userType, title, body, data = {}, userActiveInRoom = false) => {
   try {
-    // Always save to database for persistent notifications
-    const notificationSaved = await require('./notificationStorage').saveNotification(
-      userId, userType, title, body, 'system', data, 'medium'
-    );
-
     // Check if user should receive push (even if online)
     const shouldSendPush = !userActiveInRoom; // User not actively viewing the relevant content
     
     let deliveryResult = {
-      db: notificationSaved,
+      db: true, // Assume DB save happened in the event handler
       socket: null,
       push: null
     };
 
     // Send socket notification if user is connected
-    const socketResult = await sendSocketNotification(userId, userType, 'notification:received', {
+    const socketResult = await sendSocketNotification(userId, userType, 'notification', {
       title,
-      body,
+      message: body,
       data,
       timestamp: new Date().toISOString()
     });

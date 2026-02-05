@@ -26,9 +26,15 @@ const handleAccountApprovalRequest = async (payload) => {
 };
 
 const handleAccountApproved = async (payload) => {
-  const { userId, userType } = payload;
-  const entityId = payload.entityId || userId;
-  const entityType = payload.entityType || userType;
+  // Handle both field naming conventions
+  const userId = payload.userId || payload.entityId;
+  const userType = payload.userType || payload.entityType;
+  
+  // Validate required fields
+  if (!userId || !userType) {
+    console.error('Missing required fields in account approved payload:', payload);
+    return null;
+  }
   
   return {
     receiverId: userId,
@@ -42,9 +48,15 @@ const handleAccountApproved = async (payload) => {
 };
 
 const handleAccountRejected = async (payload) => {
-  const { userId, userType } = payload;
-  const entityId = payload.entityId || userId;
-  const entityType = payload.entityType || userType;
+  // Handle both field naming conventions
+  const userId = payload.userId || payload.entityId;
+  const userType = payload.userType || payload.entityType;
+  
+  // Validate required fields
+  if (!userId || !userType) {
+    console.error('Missing required fields in account rejected payload:', payload);
+    return null;
+  }
   
   return {
     receiverId: userId,
@@ -58,9 +70,15 @@ const handleAccountRejected = async (payload) => {
 };
 
 const handleKYCSubmitted = async (payload) => {
-  const { userId, userType } = payload;
-  const entityId = payload.entityId || userId;
-  const entityType = payload.entityType || userType;
+  // Handle both field naming conventions
+  const userId = payload.userId || payload.entityId;
+  const userType = payload.userType || payload.entityType;
+  
+  // Validate required fields
+  if (!userId || !userType) {
+    console.error('Missing required fields in KYC submitted payload:', payload);
+    return null;
+  }
   
   return {
     receiverId: null, // Future-proof: null for admin group
@@ -74,9 +92,16 @@ const handleKYCSubmitted = async (payload) => {
 };
 
 const handleKYCProcessed = async (payload, eventType) => {
-  const { userId, userType, processedBy, status } = payload;
-  const entityId = payload.entityId || userId;
-  const entityType = payload.entityType || userType;
+  // Handle both field naming conventions
+  const userId = payload.userId || payload.entityId;
+  const userType = payload.userType || payload.entityType;
+  const { processedBy, status } = payload;
+  
+  // Validate required fields
+  if (!userId || !userType) {
+    console.error('Missing required fields in KYC processed payload:', payload);
+    return null;
+  }
   
   let message = 'Your KYC has been verified ✅';
   if (eventType === notificationEvents.KYC_REJECTED) {
@@ -95,9 +120,16 @@ const handleKYCProcessed = async (payload, eventType) => {
 };
 
 const handleWithdrawalRequest = async (payload) => {
-  const { userId, userType, amount } = payload;
-  const entityId = payload.entityId || userId;
-  const entityType = payload.entityType || userType;
+  // Handle both field naming conventions
+  const userId = payload.userId || payload.entityId;
+  const userType = payload.userType || payload.entityType;
+  const { amount } = payload;
+  
+  // Validate required fields
+  if (!userId || !userType) {
+    console.error('Missing required fields in withdrawal request payload:', payload);
+    return null;
+  }
   
   return {
     receiverId: null, // Future-proof: null for admin group
@@ -111,9 +143,16 @@ const handleWithdrawalRequest = async (payload) => {
 };
 
 const handleWithdrawalProcessed = async (payload, eventType) => {
-  const { userId, userType, amount, processedBy, status } = payload;
-  const entityId = payload.entityId || userId;
-  const entityType = payload.entityType || userType;
+  // Handle both field naming conventions
+  const userId = payload.userId || payload.entityId;
+  const userType = payload.userType || payload.entityType;
+  const { amount, processedBy, status } = payload;
+  
+  // Validate required fields
+  if (!userId || !userType) {
+    console.error('Missing required fields in withdrawal processed payload:', payload);
+    return null;
+  }
   
   let message = 'Your withdrawal has been processed 💸';
   if (eventType === notificationEvents.WITHDRAWAL_REJECTED) {

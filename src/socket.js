@@ -78,6 +78,17 @@ module.exports = (server) => {
 
         socket.emit('authenticated', { success: true });
         
+        // Join user-specific notification room
+        const notificationRoom = `${userType}_${decoded.id}`;
+        socket.join(notificationRoom);
+        console.log(`User ${socket.id} joined notification room: ${notificationRoom}`);
+        
+        // For admin users, also join admins_room
+        if (userType === 'admin') {
+          socket.join('admins_room');
+          console.log(`Admin ${socket.id} joined admins_room`);
+        }
+        
         // Broadcast user's online status to their contacts
         broadcastUserStatus(socket.userId, socket.userType, true);
       } catch (error) {

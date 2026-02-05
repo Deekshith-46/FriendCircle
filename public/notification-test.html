@@ -680,13 +680,10 @@
                 console.log('Socket connected to:', baseUrl);
                 updateSocketStatus(true);
                 
-                // Get admin token and send with room join
-                const adminToken = document.getElementById('adminToken')?.value;
-                if (adminToken) {
-                    socket.emit('join_admin_room', { token: adminToken });
-                } else {
-                    socket.emit('join_admin_room');
-                }
+                const tokens = getTokens();
+                if (tokens.female) joinUserRoom('female', tokens.female);
+                if (tokens.agency) joinUserRoom('agency', tokens.agency);
+                if (tokens.admin) joinUserRoom('admin', tokens.admin);
             });
 
             socket.on('disconnect', function() {
@@ -694,20 +691,38 @@
                 updateSocketStatus(false);
             });
 
-            // Listen for admin notifications
-            socket.on('admin:notification', function(data) {
-                logSocketEvent('ADMIN NOTIFICATION', data);
-                addNotificationToDisplay(data, 'admin');
-            });
-
-            // Listen for general notifications
-            socket.on('notification:received', function(data) {
-                logSocketEvent('USER NOTIFICATION', data);
+            // Listen for notifications (exact event name used by backend)
+            socket.on('notification', function(data) {
+                logSocketEvent('NOTIFICATION', data);
                 addNotificationToDisplay(data, 'user');
+
+                // 🔔 REAL BROWSER NOTIFICATION
+                showBrowserNotification(data);
             });
 
             // Attempt to connect
             socket.open();
+        }
+
+        function joinUserRoom(userType, token) {
+            if (!token) return;
+
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const userId = payload.id || payload._id;
+
+            const room = `${userType}_${userId}`;
+            socket.emit('join', room);
+
+            console.log('✅ Joined room:', room);
+        }
+
+        function showBrowserNotification(data) {
+            if (Notification.permission !== 'granted') return;
+
+            new Notification(data.title || 'New Notification', {
+                body: data.message || 'You have a new message',
+                icon: '/favicon.ico'
+            });
         }
 
         function updateSocketStatus(connected) {

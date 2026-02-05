@@ -231,6 +231,16 @@ router.use('/scores', require('./scoreRoutes'));
 router.post('/submit-kyc', auth, requireReviewAccepted, kycController.submitKYC);
 router.post('/verify-kyc', auth, requireReviewAccepted, kycController.verifyKYC);
 
+// Bank Account Endpoints
+router.post('/bank-account', auth, requireReviewAccepted, parser.none(), kycController.addBankAccount);         // Add new bank account
+router.put('/bank-account', auth, requireReviewAccepted, parser.none(), kycController.updateBankAccount);        // Update existing bank account
+router.get('/bank-account', auth, requireReviewAccepted, kycController.getBankAccount);                          // Get bank account details
+
+// UPI Account Endpoints
+router.post('/upi-account', auth, requireReviewAccepted, parser.none(), kycController.addUpiAccount);            // Add new UPI details
+router.put('/upi-account', auth, requireReviewAccepted, parser.none(), kycController.updateUpiAccount);           // Update existing UPI details
+router.get('/upi-account', auth, requireReviewAccepted, kycController.getUpiAccount);                            // Get UPI details
+
 // Blocklist Routes
 router.post('/block', auth, requireReviewAccepted, blockListController.blockUser);
 router.post('/unblock', auth, requireReviewAccepted, blockListController.unblockUser);

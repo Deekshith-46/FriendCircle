@@ -112,21 +112,63 @@ function connectSocket() {
     const u = localStorage.getItem('userToken');
     const a = localStorage.getItem('adminToken');
 
-    if (u) socket.emit('join_user_room', { token: u });
-    if (a) socket.emit('join_admin_room', { token: a });
+    if (u) joinUserRoom('user', u);
+    if (a) joinUserRoom('admin', a);
   });
 
-  socket.on('notification:received', n => {
-    normalize(n);
-    userNotifications.unshift(n);
-    render();
+  socket.on('disconnect', () => {
+    console.log('Socket disconnected');
   });
 
-  socket.on('admin:notification', n => {
-    normalize(n);
-    adminNotifications.unshift(n);
+  // Listen for notifications (exact event name used by backend)
+  socket.on('notification', function(data) {
+    normalize(data);
+    // Determine if it's a user or admin notification based on the data
+    if (data.receiverType === 'admin') {
+      adminNotifications.unshift(data);
+    } else {
+      userNotifications.unshift(data);
+    }
     render();
+
+    // 🔔 REAL BROWSER NOTIFICATION
+    showBrowserNotification(data);
   });
+}
+
+function joinUserRoom(userType, token) {
+  if (!token) return;
+
+  const payload = JSON.parse(atob(token.split('.')[1]));
+  const userId = payload.id || payload._id;
+
+  const room = `${userType}_${userId}`;
+  socket.emit('join', room);
+
+  console.log('✅ Joined room:', room);
+}
+
+function showBrowserNotification(data) {
+  if (!('Notification' in window)) {
+    console.log('Browser does not support notifications');
+    return;
+  }
+
+  if (Notification.permission === 'granted') {
+    new Notification(data.title || 'New Notification', {
+      body: data.message || 'You have a new message',
+      icon: '/favicon.ico'
+    });
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then(permission => {
+      if (permission === 'granted') {
+        new Notification(data.title || 'New Notification', {
+          body: data.message || 'You have a new message',
+          icon: '/favicon.ico'
+        });
+      }
+    });
+  }
 }
 
 /* ---------------- API ---------------- */

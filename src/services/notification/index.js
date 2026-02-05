@@ -51,7 +51,7 @@ const notificationService = {
         const io = getIO();
         if (io) {
           // Emit to admin room (admins_room)
-          io.to('admins_room').emit('admin:notification', {
+          io.to('admins_room').emit('notification', {
             title: notificationData.title,
             message: notificationData.message,
             type: notificationData.type,

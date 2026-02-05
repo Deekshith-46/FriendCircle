@@ -5,8 +5,11 @@ const kycController = require('../../controllers/femaleUserControllers/kycContro
 const auth = require('../../middlewares/authMiddleware');
 const { parser } = require('../../config/multer');
 
-// Submit KYC (accepts JSON or multipart/form-data without files)
+// Submit/Update KYC (accepts JSON or multipart/form-data without files)
 router.post('/submit-kyc', auth, parser.none(), kycController.submitKYC);
+
+// Get current payout account details
+router.get('/payout-details', auth, kycController.getPayoutDetails);
 
 // Admin verification of KYC (accepts JSON or multipart/form-data without files)
 router.post('/verify-kyc', auth, parser.none(), kycController.verifyKYC);

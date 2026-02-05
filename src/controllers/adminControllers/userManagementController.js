@@ -269,6 +269,19 @@ exports.reviewRegistration = async (req, res) => {
         // Update the review status
         const user = await Model.findByIdAndUpdate(userId, { reviewStatus }, { new: true });
         
+        // 🔥 FIRING NOTIFICATION EVENT
+        await notificationService.handleEvent(
+            reviewStatus === 'accepted' 
+                ? notificationEvents.ACCOUNT_APPROVED 
+                : notificationEvents.ACCOUNT_REJECTED,
+            {
+                userId: user._id,
+                userType: userType,
+                processedBy: req.admin?._id || req.staff?._id,
+                status: reviewStatus
+            }
+        );
+        
         // Trigger referral bonus if status changed to "accepted" from a non-accepted status
         if (reviewStatus === 'accepted' && oldReviewStatus !== 'accepted') {
             
@@ -352,17 +365,14 @@ exports.updateKYCStatus = async (req, res) => {
                 user.kycDetails.upi.status = 'rejected';
             }
             
-            // Check if any other method is still accepted, otherwise set overall to rejected
-            const hasAcceptedMethod = 
-                (user.kycDetails.bank && user.kycDetails.bank.status === 'accepted') ||
-                (user.kycDetails.upi && user.kycDetails.upi.status === 'accepted');
+            // Calculate overall kycStatus based on all payout methods
+            const hasAcceptedMethod = (user.kycDetails.bank?.status === 'accepted' || 
+                                     user.kycDetails.upi?.status === 'accepted');
+            const hasPendingMethod = (user.kycDetails.bank?.status === 'pending' || 
+                                     user.kycDetails.upi?.status === 'pending');
             
-            if (!hasAcceptedMethod) {
-                user.kycStatus = 'rejected';
-            } else {
-                // If there are still accepted methods, don't set overall to rejected
-                user.kycStatus = 'accepted';
-            }
+            // If any method is pending, overall status is pending for review
+            user.kycStatus = hasPendingMethod ? 'pending' : (hasAcceptedMethod ? 'accepted' : 'rejected');
         }
         
         await user.save();
@@ -420,8 +430,14 @@ exports.reviewKYC = async (req, res) => {
                     };
                 }
                 
-                // Set overall KYC status to accepted
-                user.kycStatus = 'accepted';
+                // Calculate overall kycStatus based on all payout methods
+                const hasAcceptedMethod = (user.kycDetails.bank?.status === 'accepted' || 
+                                         user.kycDetails.upi?.status === 'accepted');
+                const hasPendingMethod = (user.kycDetails.bank?.status === 'pending' || 
+                                         user.kycDetails.upi?.status === 'pending');
+                
+                // If any method is pending, overall status is pending for review
+                user.kycStatus = hasPendingMethod ? 'pending' : (hasAcceptedMethod ? 'accepted' : 'pending');
                 await user.save();
                 
                 // Send notification to female user about KYC approval
@@ -536,8 +552,14 @@ exports.reviewKYC = async (req, res) => {
                     };
                 }
                 
-                // Set overall KYC status to accepted
-                user.kycStatus = 'accepted';
+                // Calculate overall kycStatus based on all payout methods
+                const hasAcceptedMethod = (user.kycDetails.bank?.status === 'accepted' || 
+                                         user.kycDetails.upi?.status === 'accepted');
+                const hasPendingMethod = (user.kycDetails.bank?.status === 'pending' || 
+                                         user.kycDetails.upi?.status === 'pending');
+                
+                // If any method is pending, overall status is pending for review
+                user.kycStatus = hasPendingMethod ? 'pending' : (hasAcceptedMethod ? 'accepted' : 'pending');
                 await user.save();
                 
                 // Send notification to agency user about KYC approval
