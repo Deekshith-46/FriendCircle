@@ -87,7 +87,7 @@ exports.startCall = async (req, res) => {
     const femaleRatePerSecond = femaleRatePerMinute / 60;
     
     // Determine if female belongs to agency
-    const isAgencyFemale = receiver.referredByAgency && receiver.referredByAgency !== null;
+    const isAgencyFemale = !!receiver.referredByAgency;
     
     // Get platform margin per minute and convert to per second
     const platformMarginPerMinute = 
