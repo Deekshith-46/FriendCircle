@@ -121,8 +121,8 @@ router.get('/following', auth, followingFollowersController.getMaleFollowingList
 // Get Followers List
 router.get('/followers', auth, followingFollowersController.getMaleFollowersList);
 
-// Buy Coins Package
-router.post('/buy-coins', auth, maleUserController.buyCoins);
+// Buy Coins Package - DEPRECATED: Use /payment/coin/order + /payment/verify instead
+// router.post('/buy-coins', auth, maleUserController.buyCoins);
 
 // Blocklist Routes
 router.post('/block', auth, blockListController.blockUser);

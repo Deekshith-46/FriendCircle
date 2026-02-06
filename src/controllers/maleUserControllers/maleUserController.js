@@ -812,18 +812,25 @@ exports.uploadImage = async (req, res) => {
   }
 };
 
-// Buy Coins
+// Buy Coins - DEPRECATED: Use proper Razorpay payment flow instead
+// This function is dangerous as it credits coins without payment verification
 exports.buyCoins = async (req, res) => {
+  return res.status(400).json({ 
+    success: false, 
+    message: 'Use /payment/coin/order + /payment/verify for secure coin purchase' 
+  });
+  /*
   const { packageId } = req.body;
   try {
     const selectedPackage = await Package.findById(packageId);
     const maleUser = await MaleUser.findById(req.user.id);
-    maleUser.balance += selectedPackage.coins;
+    maleUser.balance += selectedPackage.coins;  // DANGEROUS: No payment verification!
     await maleUser.save();
     res.json({ success: true, message: messages.COINS.COINS_ADDED(selectedPackage.coins) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
+  */
 };
 
 // Get Male User Profile

@@ -127,7 +127,8 @@ const processReferralBonus = async (user, userType) => {
       amount: referrerBonusAmount,
       message: `Referral bonus for inviting ${getUserEmail(user, userType)}`,
       balanceAfter: bonusType === 'wallet' ? referrer.walletBalance : referrer.coinBalance,
-      createdBy: referrer._id
+      createdBy: referrer._id,
+      status: 'SUCCESS'  // Referral bonuses are immediately successful
     });
     
     await Transaction.create({
@@ -138,7 +139,8 @@ const processReferralBonus = async (user, userType) => {
       amount: referredUserBonusAmount,
       message: `Referral signup bonus using ${getReferrerCode(referrer, userType)}`,
       balanceAfter: bonusType === 'wallet' ? user.walletBalance : user.coinBalance,
-      createdBy: user._id
+      createdBy: user._id,
+      status: 'SUCCESS'  // Referral bonuses are immediately successful
     });
     
     return true;

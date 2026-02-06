@@ -11,6 +11,27 @@ const transactionSchema = new mongoose.Schema({
   balanceAfter: { type: Number, required: true },
   earningType: { type: String, enum: ['call', 'gift', 'other'] }, // Type of earning for female users
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'AdminUser' },
+  
+  // Payment gateway integration
+  paymentGateway: { 
+    type: String, 
+    enum: ['razorpay', 'stripe', 'paypal'], 
+    default: 'razorpay' 
+  },
+  paymentId: { type: String }, // Razorpay payment ID
+  orderId: { type: String },    // Razorpay order ID
+  status: { 
+    type: String, 
+    enum: ['PENDING', 'SUCCESS', 'FAILED', 'REFUNDED'], 
+    default: 'PENDING' 
+  },
+  
+  // Admin earning reference
+  adminEarningId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'AdminEarning' 
+  },
+  
 }, { timestamps: true });
 
 module.exports = mongoose.model('Transaction', transactionSchema);

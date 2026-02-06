@@ -106,6 +106,7 @@ exports.createCoinOrder = async (req, res) => {
 // Verify payment and update user balance
 exports.verifyPayment = async (req, res) => {
   try {
+    console.log('🔥 VERIFY PAYMENT API HIT 🔥', req.body);
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
     const payment = await Payment.findOne({ razorpayOrderId: razorpay_order_id });
@@ -113,15 +114,15 @@ exports.verifyPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Payment not found' });
     }
 
-    // // Verify signature
-    // // const generated_signature = crypto
-    // //   .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-    // //   .update(razorpay_order_id + '|' + razorpay_payment_id)
-    // //   .digest('hex');
+    // 🔐 CRITICAL: Verify Razorpay signature (SECURITY)
+    const generated_signature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(razorpay_order_id + '|' + razorpay_payment_id)
+      .digest('hex');
 
-    // // if (generated_signature !== razorpay_signature) {
-    // //   return res.status(400).json({ success: false, message: 'Invalid signature' });
-    // // }
+    if (generated_signature !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Invalid signature' });
+    }
 
     // Update payment record
     payment.razorpayPaymentId = razorpay_payment_id;
@@ -145,7 +146,11 @@ exports.verifyPayment = async (req, res) => {
         amount: payment.walletAmount,
         message: `Wallet recharge via Razorpay - Order: ${payment.razorpayOrderId}`,
         balanceAfter: user.walletBalance,
-        createdBy: user._id
+        createdBy: user._id,
+        paymentGateway: 'razorpay',
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id,
+        status: 'SUCCESS'
       });
     } else if (payment.type === 'coin') {
       user.coinBalance = (user.coinBalance || 0) + payment.coinsReceived;
@@ -159,7 +164,11 @@ exports.verifyPayment = async (req, res) => {
         amount: payment.coinsReceived,
         message: `Coin recharge via Razorpay - Order: ${payment.razorpayOrderId}`,
         balanceAfter: user.coinBalance,
-        createdBy: user._id
+        createdBy: user._id,
+        paymentGateway: 'razorpay',
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id,
+        status: 'SUCCESS'
       });
     }
 
@@ -167,12 +176,66 @@ exports.verifyPayment = async (req, res) => {
     payment.transactionId = transaction._id;
     await payment.save();
 
+    // 🧾 Create Admin Earning Record (Bookkeeping)
+    const AdminEarning = require('../../models/admin/AdminEarning');
+    const AdminPackage = require('../../models/admin/Package');
+    
+    let adminEarning;
+    if (payment.type === 'coin') {
+      // For coin purchases, admin earns the full package amount
+      const pkg = await AdminPackage.findById(payment.packageId);
+      if (pkg) {
+        adminEarning = await AdminEarning.create({
+          source: 'PACKAGE_PURCHASE',
+          fromUserType: 'male',
+          fromUserModel: 'MaleUser',
+          fromUserId: user._id,
+          amount: pkg.amount,
+          transactionId: transaction._id,
+          paymentId: payment._id,
+          packageId: payment.packageId,
+          metadata: {
+            packageName: pkg.name,
+            packageAmount: pkg.amount,
+            coinsReceived: payment.coinsReceived
+          }
+        });
+        
+        // Link admin earning to transaction
+        transaction.adminEarningId = adminEarning._id;
+        await transaction.save();
+      }
+    } else if (payment.type === 'wallet') {
+      // For wallet recharges, admin earns a small percentage (e.g., 2% service fee)
+      const serviceFee = payment.walletAmount * 0.02; // 2% service fee
+      if (serviceFee > 0) {
+        adminEarning = await AdminEarning.create({
+          source: 'WALLET_RECHARGE',
+          fromUserType: 'male',
+          fromUserModel: 'MaleUser',
+          fromUserId: user._id,
+          amount: serviceFee,
+          transactionId: transaction._id,
+          paymentId: payment._id,
+          metadata: {
+            walletAmount: payment.walletAmount,
+            serviceFee: serviceFee
+          }
+        });
+        
+        // Link admin earning to transaction
+        transaction.adminEarningId = adminEarning._id;
+        await transaction.save();
+      }
+    }
+
     res.json({
       success: true,
       message: messages.PAYMENT.PAYMENT_VERIFIED,
       data: {
         paymentId: payment._id,
         transactionId: transaction._id,
+        adminEarningId: adminEarning?._id,
         walletBalance: user.walletBalance,
         coinBalance: user.coinBalance
       }

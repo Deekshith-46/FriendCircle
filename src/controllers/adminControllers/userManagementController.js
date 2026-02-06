@@ -334,7 +334,8 @@ exports.operateBalance = async (req, res) => {
             amount: numericAmount,
             message: message || (action === 'credit' ? messages.USER_MANAGEMENT.BALANCE_CREDITED : messages.USER_MANAGEMENT.BALANCE_DEBITED),
             balanceAfter: updatedBalance,
-            createdBy: req.admin?._id || req.staff?._id
+            createdBy: req.admin?._id || req.staff?._id,
+            status: 'SUCCESS'  // Manual admin operations are immediately successful
         });
 
         return res.json({ success: true, data: { userId: user._id, [balanceField]: updatedBalance, transaction: txn } });
