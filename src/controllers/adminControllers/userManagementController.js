@@ -159,7 +159,8 @@ exports.listUsers = async (req, res) => {
         .populate({ path: 'languages', select: 'title _id' })
         .populate({ path: 'favourites', select: 'name email' })
         .populate({ path: 'followers', select: 'name email' })
-        .populate({ path: 'femalefollowing', select: 'name email' });
+        .populate({ path: 'femalefollowing', select: 'name email' })
+        .populate({ path: 'referredByAgency', select: 'firstName lastName email' });
 
       return res.json({ success: true, data });
     }
@@ -167,7 +168,95 @@ exports.listUsers = async (req, res) => {
     /* ================== AGENCY ================== */
     if (type === 'agency') {
       data = await AgencyUser.find()
+        .populate({ path: 'referredByAgency', select: 'firstName lastName email' })
+        .populate({ path: 'referredFemaleUsers', select: 'name email firstName lastName' });
+
+      return res.json({ success: true, data });
+    }
+
+    /* ================== ALL USERS (no type specified) ================== */
+    if (!type) {
+      const maleUsers = await MaleUser.find()
+        .select('-searchPreferences -balance')
+        .populate({ path: 'images', select: 'maleUserId imageUrl createdAt updatedAt' })
+        .populate({ path: 'interests', select: 'title _id' })
+        .populate({ path: 'languages', select: 'title _id' })
+        .populate({ path: 'relationshipGoals', select: 'title _id' })
+        .populate({ path: 'religion', select: 'title _id' })
+        .populate({ path: 'favourites', select: 'name email' })
+
+        // join → female user
+        .populate({
+          path: 'malefollowing',
+          populate: { path: 'femaleUserId', select: 'name' }
+        })
+        .populate({
+          path: 'malefollowers',
+          populate: { path: 'femaleUserId', select: 'name' }
+        })
+
+        // referred by (male)
+        .populate({
+          path: 'referredBy',
+          select: 'firstName lastName'
+        });
+
+      // map to {id, name}
+      const mappedMaleUsers = maleUsers.map(u => {
+        const obj = u.toObject();
+
+        const mapFemale = arr =>
+          arr
+            ?.filter(f => f.femaleUserId)
+            .map(f => ({
+              id: f.femaleUserId._id,
+              name: f.femaleUserId.name
+            })) || [];
+
+        const mapReferred = arr =>
+          arr?.map(r => ({
+            id: r._id,
+            name: `${r.firstName} ${r.lastName || ''}`.trim()
+          })) || [];
+
+        return {
+          userType: 'male',
+          ...obj,
+          malefollowing: mapFemale(obj.malefollowing),
+          malefollowers: mapFemale(obj.malefollowers),
+          referredBy: mapReferred(obj.referredBy)
+        };
+      });
+
+      const femaleUsers = await FemaleUser.find()
+        .select('-searchPreferences -balance')
+        .populate({ path: 'images', select: 'femaleUserId imageUrl createdAt updatedAt' })
+        .populate({ path: 'interests', select: 'title _id' })
+        .populate({ path: 'languages', select: 'title _id' })
+        .populate({ path: 'favourites', select: 'name email' })
+        .populate({ path: 'followers', select: 'name email' })
+        .populate({ path: 'femalefollowing', select: 'name email' })
         .populate({ path: 'referredByAgency', select: 'firstName lastName email' });
+
+      const mappedFemaleUsers = femaleUsers.map(u => ({
+        userType: 'female',
+        ...u.toObject()
+      }));
+
+      const agencyUsers = await AgencyUser.find()
+        .populate({ path: 'referredByAgency', select: 'firstName lastName email' })
+        .populate({ path: 'referredFemaleUsers', select: 'name email firstName lastName' });
+
+      const mappedAgencyUsers = agencyUsers.map(u => ({
+        userType: 'agency',
+        ...u.toObject()
+      }));
+
+      data = [
+        ...mappedMaleUsers,
+        ...mappedFemaleUsers,
+        ...mappedAgencyUsers
+      ];
 
       return res.json({ success: true, data });
     }
