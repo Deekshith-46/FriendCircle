@@ -48,7 +48,33 @@ exports.addDetails = async (req, res) => {
     if (dateOfBirth !== undefined) user.dateOfBirth = dateOfBirth;
     if (gender !== undefined) user.gender = gender;
     if (bio !== undefined) user.bio = bio;
-    if (Array.isArray(interests)) user.interests = interests;
+    if (Array.isArray(interests) && interests.length > 0) {
+      try {
+        // Import mongoose to convert strings to ObjectIds if needed
+        const mongoose = require('mongoose');
+        
+        // Convert string IDs to ObjectIds for proper database lookup
+        const objectIds = interests.map(id => {
+          if (typeof id === 'string') {
+            return new mongoose.Types.ObjectId(id);
+          }
+          return id;
+        });
+        
+        // Validate that these interest IDs exist
+        const Interest = require('../../models/admin/Interest');
+        const validInterests = await Interest.find({ _id: { $in: objectIds } });
+        console.log('Validating male user interests:', interests, 'Found:', validInterests.length, 'Searched IDs:', objectIds);
+        user.interests = validInterests.map(i => i._id);
+      } catch (interestErr) {
+        console.error('Error validating male user interests:', interestErr);
+        // Continue without setting interests if validation fails
+        user.interests = [];
+      }
+    } else if (Array.isArray(interests)) {
+      // If interests is an empty array, set it to empty
+      user.interests = [];
+    }
     if (Array.isArray(languages)) user.languages = languages;
     if (religion !== undefined) user.religion = religion;
     if (Array.isArray(relationshipGoals)) user.relationshipGoals = relationshipGoals;
@@ -88,6 +114,34 @@ exports.updateDetails = async (req, res) => {
       'interests','languages','religion','relationshipGoals','height','searchPreferences','images'
     ]);
     Object.keys(update).forEach((k) => { if (!allowed.has(k)) delete update[k]; });
+
+    // Handle interests with validation if present in update
+    if (update.interests && Array.isArray(update.interests) && update.interests.length > 0) {
+      try {
+        // Import mongoose to convert strings to ObjectIds if needed
+        const mongoose = require('mongoose');
+        
+        // Convert string IDs to ObjectIds for proper database lookup
+        const objectIds = update.interests.map(id => {
+          if (typeof id === 'string') {
+            return new mongoose.Types.ObjectId(id);
+          }
+          return id;
+        });
+        
+        // Validate that these interest IDs exist
+        const Interest = require('../../models/admin/Interest');
+        const validInterests = await Interest.find({ _id: { $in: objectIds } });
+        update.interests = validInterests.map(i => i._id);
+      } catch (interestErr) {
+        console.error('Error validating interests in updateDetails:', interestErr);
+        // Set to empty array if validation fails
+        update.interests = [];
+      }
+    } else if (update.interests && Array.isArray(update.interests)) {
+      // If interests is an empty array, keep it as empty
+      update.interests = [];
+    }
 
     const user = await MaleUser.findByIdAndUpdate(
       req.user.id,

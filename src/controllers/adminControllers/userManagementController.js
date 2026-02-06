@@ -153,10 +153,13 @@ exports.listUsers = async (req, res) => {
     /* ================== FEMALE ================== */
     if (type === 'female') {
       data = await FemaleUser.find()
-        .select('name email score earnings totalOnlineMinutes images')
+        .select('-searchPreferences -balance')
         .populate({ path: 'images', select: 'femaleUserId imageUrl createdAt updatedAt' })
         .populate({ path: 'interests', select: 'title _id' })
-        .populate({ path: 'languages', select: 'title _id' });
+        .populate({ path: 'languages', select: 'title _id' })
+        .populate({ path: 'favourites', select: 'name email' })
+        .populate({ path: 'followers', select: 'name email' })
+        .populate({ path: 'femalefollowing', select: 'name email' });
 
       return res.json({ success: true, data });
     }

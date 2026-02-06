@@ -1,4 +1,4 @@
-const { sendPushNotification } = require('./pushSender');
+const { sendPushNotification, sendMultiplePushNotifications } = require('./pushSender');
 const { getSocketIdForUser, getIO } = require('../../socketInstance');
 
 // Send socket notification to specific user
@@ -61,17 +61,25 @@ const sendNotificationWithIntent = async (userId, userType, title, body, data = 
       
       const user = await User.findById(userId).select('fcmTokens');
       if (user && user.fcmTokens && user.fcmTokens.length > 0) {
-        const pushResults = [];
-        for (const tokenObj of user.fcmTokens) {
-          const pushSuccess = await sendPushNotification(tokenObj.token, title, body, data);
-          pushResults.push({
-            token: tokenObj.token,
-            platform: tokenObj.platform,
-            success: pushSuccess
-          });
-        }
+        // Extract tokens for batch processing
+        const tokens = user.fcmTokens.map(tokenObj => tokenObj.token);
+        
+        // Send multiple push notifications at once for efficiency
+        const pushResult = await sendMultiplePushNotifications(tokens, title, body, {
+          ...data,
+          userId: userId.toString(),
+          userType: userType
+        });
+        
+        // Map results back to include platform info
+        const pushResults = user.fcmTokens.map((tokenObj, index) => ({
+          token: tokenObj.token,
+          platform: tokenObj.platform,
+          success: pushResult.results[index]?.success || false
+        }));
+        
         deliveryResult.push = pushResults;
-        console.log(`Push notifications sent to ${user.fcmTokens.length} device(s) for user ${userId}`);
+        console.log(`Push notifications sent to ${user.fcmTokens.length} device(s) for user ${userId}. Success: ${pushResult.successCount}, Failed: ${pushResult.failureCount}`);
       } else {
         console.log(`No FCM tokens found for user ${userId}, skipping push notification`);
       }

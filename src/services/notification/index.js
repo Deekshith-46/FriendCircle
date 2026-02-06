@@ -9,6 +9,7 @@ const {
   markAllNotificationsAsRead, 
   getUnreadCount 
 } = require('./notificationStorage');
+const NotificationAnalyticsService = require('./analyticsService');
 
 // Main notification service API
 const notificationService = {
@@ -84,10 +85,15 @@ const notificationService = {
       false // userActiveInRoom = false for event notifications
     );
     
+    // Track delivery metrics for analytics
+    if (notificationId) {
+      await NotificationAnalyticsService.trackDeliveryMetrics(notificationId, deliveryResult);
+    }
+    
     // Return success if either DB save succeeded OR socket delivery succeeded
     return dbSaveSuccess || (deliveryResult.socket && deliveryResult.socket.delivered);
   },
-  
+
   // Direct delivery method for immediate notifications
   deliverNotification: async (notificationData) => {
     if (!notificationData) return false;
@@ -113,6 +119,11 @@ const notificationService = {
       false
     );
     
+    // Track delivery metrics for analytics
+    if (notificationId) {
+      await NotificationAnalyticsService.trackDeliveryMetrics(notificationId, deliveryResult);
+    }
+    
     return deliveryResult.db !== false;
   },
   // Event-based notifications (raw handler - for internal use)
@@ -131,6 +142,12 @@ const notificationService = {
   markNotificationAsRead,
   markAllNotificationsAsRead,
   getUnreadCount,
+  
+  // Analytics methods
+  getNotificationStats: NotificationAnalyticsService.getNotificationStats,
+  getDeliveryRates: NotificationAnalyticsService.getDeliveryRates,
+  getRecentActivity: NotificationAnalyticsService.getRecentActivity,
+  getDailyTrends: NotificationAnalyticsService.getDailyTrends,
   
   // Utility functions
   // DEPRECATED: getAdminId is no longer used for notification delivery

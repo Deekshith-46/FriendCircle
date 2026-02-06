@@ -693,7 +693,34 @@ exports.addUserInfo = async (req, res) => {
     user.gender = gender;
     user.bio = bio;
     user.videoUrl = videoUrl;
-    user.interests = interests;
+    // Handle interests with validation if provided
+        if (interests && Array.isArray(interests) && interests.length > 0) {
+          try {
+            // Import mongoose to convert strings to ObjectIds if needed
+            const mongoose = require('mongoose');
+            
+            // Convert string IDs to ObjectIds for proper database lookup
+            const objectIds = interests.map(id => {
+              if (typeof id === 'string') {
+                return new mongoose.Types.ObjectId(id);
+              }
+              return id;
+            });
+            
+            // Validate that these interest IDs exist
+            const Interest = require('../../models/admin/Interest');
+            const validInterests = await Interest.find({ _id: { $in: objectIds } });
+            console.log('Validating interests:', interests, 'Found:', validInterests.length, 'Searched IDs:', objectIds);
+            user.interests = validInterests.map(i => i._id);
+          } catch (interestErr) {
+            console.error('Error validating interests:', interestErr);
+            // Continue without setting interests if validation fails
+            user.interests = [];
+          }
+        } else if (interests !== undefined) {
+          // If interests is provided but not a valid array, set to empty
+          user.interests = [];
+        }
     user.languages = languages;
     if (hobbies) user.hobbies = hobbies;
     if (sports) user.sports = sports;
@@ -914,10 +941,21 @@ exports.completeUserProfile = async (req, res) => {
     if (interests && Array.isArray(interests) && interests.length > 0) {
       console.log('✅ Setting interests:', interests);
       try {
+        // Import mongoose to convert strings to ObjectIds if needed
+        const mongoose = require('mongoose');
+        
+        // Convert string IDs to ObjectIds for proper database lookup
+        const objectIds = interests.map(id => {
+          if (typeof id === 'string') {
+            return new mongoose.Types.ObjectId(id);
+          }
+          return id;
+        });
+        
         // Validate that these interest IDs exist
         const Interest = require('../../models/admin/Interest');
-        const validInterests = await Interest.find({ _id: { $in: interests } });
-        console.log('Valid interests found:', validInterests.length, 'out of', interests.length);
+        const validInterests = await Interest.find({ _id: { $in: objectIds } });
+        console.log('Valid interests found:', validInterests.length, 'out of', interests.length, 'Searched IDs:', objectIds);
         user.interests = validInterests.map(i => i._id);
       } catch (interestErr) {
         console.error('Error validating interests:', interestErr);

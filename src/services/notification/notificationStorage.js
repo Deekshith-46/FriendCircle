@@ -1,5 +1,52 @@
 const Notification = require('../../models/common/Notification');
 
+// Rate limiting cache to prevent notification spam
+const notificationRateLimitCache = new Map(); // key: userId:userType:type, value: { count, timestamp }
+
+// Check if notification should be rate limited
+const isRateLimited = (userId, userType, type) => {
+  const key = `${userId}:${userType}:${type}`;
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute window
+  const maxPerWindow = 5; // Max 5 notifications per minute per user-type-type combination
+
+  const record = notificationRateLimitCache.get(key);
+  
+  if (!record) {
+    // First notification in this window
+    notificationRateLimitCache.set(key, { count: 1, timestamp: now });
+    return false;
+  }
+
+  // Check if window has expired
+  if (now - record.timestamp > windowMs) {
+    // Reset counter for new window
+    notificationRateLimitCache.set(key, { count: 1, timestamp: now });
+    return false;
+  }
+
+  // Check if limit exceeded
+  if (record.count >= maxPerWindow) {
+    return true; // Rate limited
+  }
+
+  // Increment counter
+  record.count += 1;
+  return false; // Not rate limited
+};
+
+// Clear expired rate limit records periodically
+setInterval(() => {
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute window
+
+  for (const [key, record] of notificationRateLimitCache.entries()) {
+    if (now - record.timestamp > windowMs) {
+      notificationRateLimitCache.delete(key);
+    }
+  }
+}, 30000); // Clean every 30 seconds
+
 // Save notification to database
 const saveNotification = async (receiverId, receiverType, title, message, type, data = {}, priority = 'medium') => {
   try {
@@ -10,6 +57,14 @@ const saveNotification = async (receiverId, receiverType, title, message, type, 
     console.log('message:', message);
     console.log('type:', type);
     console.log('data:', data);
+    
+    // Apply rate limiting for user-specific notifications
+    if (receiverId && ['KYC_APPROVED', 'WITHDRAWAL_APPROVED', 'ACCOUNT_APPROVED'].includes(type)) {
+      if (isRateLimited(receiverId, receiverType, type)) {
+        console.log(`⚠️ Notification rate limited for ${receiverType} user ${receiverId}, type: ${type}`);
+        return null; // Skip saving rate-limited notification
+      }
+    }
     
     // Convert receiverType to receiverModel for database schema
     const receiverModelMap = {
