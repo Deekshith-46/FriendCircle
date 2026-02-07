@@ -200,7 +200,8 @@ exports.agencyVerifyLoginOtp = async (req, res) => {
       } else if (agency.reviewStatus === 'accepted') {
         redirectTo = 'DASHBOARD';
       } else if (agency.reviewStatus === 'rejected') {
-        redirectTo = 'REJECTED';
+        // When rejected, agency should complete profile again with proper details
+        redirectTo = 'COMPLETE_PROFILE';
       }
 
       res.json({
@@ -215,7 +216,8 @@ exports.agencyVerifyLoginOtp = async (req, res) => {
             email: agency.email,
             mobileNumber: agency.mobileNumber,
             profileCompleted: agency.profileCompleted,
-            reviewStatus: agency.reviewStatus
+            reviewStatus: agency.reviewStatus,
+            ...(agency.reviewStatus === 'rejected' && agency.rejectionReason && { rejectionReason: agency.rejectionReason })
           },
           redirectTo: redirectTo
         }

@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin Notification Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      padding: 20px;
+      max-width: 800px;
+      margin: auto;
+    }
+    .box {
+      background: #fff;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+    }
+    input, select {
+      padding: 8px;
+      width: 100%;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    button {
+      padding: 10px 15px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .notification {
+      border: 1px solid #ddd;
+      background: #fafafa;
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .unread { border-left: 4px solid #007bff; }
+    .status {
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    .connected { background: #d4edda; color: #155724; }
+    .disconnected { background: #f8d7da; color: #721c24; }
+    .log {
+      background: #333;
+      color: #0f0;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <h2>🔔 Admin Notification Test</h2>
+  
+  <!-- Connection Status -->
+  <div class="box">
+    <h3>Connection Status</h3>
+    <div id="status" class="status disconnected">Disconnected</div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <!-- Authentication -->
+  <div class="box">
+    <h3>Authentication</h3>
+    <input id="apiUrl" value="http://localhost:5001" placeholder="API URL">
+    <input id="token" placeholder="JWT Token">
+    <button onclick="connectSocket()">Connect Socket</button>
+    <button onclick="requestNotificationPermission()">Enable Browser Notifications</button>
+  </div>
+
+  <!-- Test Admin Actions -->
+  <div class="box">
+    <h3>Test Admin Actions</h3>
+    <select id="userType">
+      <option value="female">Female User</option>
+      <option value="agency">Agency User</option>
+    </select>
+    <input id="userId" placeholder="User ID to approve/reject">
+    <button onclick="testRegistrationApproval()">Test Registration Approval</button>
+    <button onclick="testRegistrationRejection()">Test Registration Rejection</button>
+    <button onclick="testKYCApproval()">Test KYC Approval</button>
+    <button onclick="testKYCRejection()">Test KYC Rejection</button>
+    <button onclick="testWithdrawalApproval()">Test Withdrawal Approval</button>
+    <button onclick="testWithdrawalRejection()">Test Withdrawal Rejection</button>
+  </div>
+
+  <!-- Notifications Display -->
+  <div class="box">
+    <h3>Received Notifications</h3>
+    <button onclick="clearNotifications()">Clear All</button>
+    <div id="notifications"></div>
+  </div>
+
+<script>
+let socket;
+let notifications = [];
+
+// Utility functions
+function log(message) {
+  const timestamp = new Date().toLocaleTimeString();
+  const logEntry = `[${timestamp}] ${message}`;
+  console.log(logEntry);
+  
+  const logDiv = document.getElementById('log');
+  logDiv.innerHTML += logEntry + '\n';
+  logDiv.scrollTop = logDiv.scrollHeight;
+  
+  // Keep only last 20 log entries
+  const lines = logDiv.innerHTML.split('\n');
+  if (lines.length > 20) {
+    logDiv.innerHTML = lines.slice(-20).join('\n');
+  }
+}
+
+function updateStatus(connected) {
+  const statusDiv = document.getElementById('status');
+  if (connected) {
+    statusDiv.className = 'status connected';
+    statusDiv.textContent = '✅ Connected to Socket Server';
+  } else {
+    statusDiv.className = 'status disconnected';
+    statusDiv.textContent = '❌ Disconnected from Socket Server';
+  }
+}
+
+// Socket Connection
+function connectSocket() {
+  const token = document.getElementById('token').value;
+  const apiUrl = document.getElementById('apiUrl').value;
+  
+  if (!token) {
+    alert('Please enter JWT token');
+    return;
+  }
+  
+  if (socket && socket.connected) {
+    socket.disconnect();
+  }
+  
+  // Extract base URL for socket connection
+  const url = new URL(apiUrl);
+  const socketUrl = `${url.protocol}//${url.host}`;
+  
+  socket = io(socketUrl);
+  
+  // Authenticate with token
+  socket.emit('authenticate', token);
+  
+  socket.on('connect', () => {
+    log('Socket connected successfully');
+    updateStatus(true);
+  });
+  
+  socket.on('authenticated', () => {
+    log('Socket authentication successful');
+  });
+  
+  socket.on('unauthorized', () => {
+    log('Socket authentication failed');
+    alert('Authentication failed. Please check your token.');
+  });
+  
+  socket.on('disconnect', () => {
+    log('Socket disconnected');
+    updateStatus(false);
+  });
+  
+  socket.on('connect_error', (error) => {
+    log(`Connection error: ${error.message}`);
+    updateStatus(false);
+  });
+  
+  // Listen for notifications (this is the key part that was missing)
+  socket.on('notification', function(data) {
+    log(`Received notification: ${JSON.stringify(data)}`);
+    handleNotification(data);
+  });
+  
+  // Also listen for admin-specific notifications
+  socket.on('admin:notification', function(data) {
+    log(`Received admin notification: ${JSON.stringify(data)}`);
+    handleNotification(data);
+  });
+}
+
+// Handle incoming notifications
+function handleNotification(data) {
+  // Add to notifications array
+  notifications.unshift({
+    ...data,
+    id: Date.now(),
+    timestamp: new Date(),
+    isRead: false
+  });
+  
+  // Display notification
+  displayNotification(data);
+  
+  // Show browser notification
+  showBrowserNotification(data);
+  
+  // Update UI
+  renderNotifications();
+}
+
+// Display notification in UI
+function displayNotification(data) {
+  const container = document.getElementById('notifications');
+  const div = document.createElement('div');
+  div.className = 'notification unread';
+  div.innerHTML = `
+    <strong>${data.title || 'Notification'}</strong><br>
+    ${data.message || 'No message'}<br>
+    <small>${new Date().toLocaleString()}</small>
+  `;
+  container.insertBefore(div, container.firstChild);
+}
+
+// Browser notifications
+function showBrowserNotification(data) {
+  if (!('Notification' in window)) {
+    log('Browser does not support notifications');
+    return;
+  }
+  
+  if (Notification.permission === 'granted') {
+    new Notification(data.title || 'New Notification', {
+      body: data.message || 'You have a new notification',
+      icon: '/favicon.ico'
+    });
+    log('Browser notification shown');
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then(permission => {
+      if (permission === 'granted') {
+        new Notification(data.title || 'New Notification', {
+          body: data.message || 'You have a new notification',
+          icon: '/favicon.ico'
+        });
+        log('Browser notification shown after permission granted');
+      }
+    });
+  }
+}
+
+// Request notification permission
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) {
+    alert('This browser does not support notifications');
+    return;
+  }
+  
+  if (Notification.permission === 'granted') {
+    alert('Notifications already enabled');
+    return;
+  }
+  
+  const permission = await Notification.requestPermission();
+  if (permission === 'granted') {
+    alert('Notifications enabled successfully!');
+    log('Notification permission granted');
+  } else {
+    alert('Notifications permission denied');
+    log('Notification permission denied');
+  }
+}
+
+// Test Functions
+async function testRegistrationApproval() {
+  await testAdminAction('registration', 'approve');
+}
+
+async function testRegistrationRejection() {
+  await testAdminAction('registration', 'reject');
+}
+
+async function testKYCApproval() {
+  await testAdminAction('kyc', 'approve');
+}
+
+async function testKYCRejection() {
+  await testAdminAction('kyc', 'reject');
+}
+
+async function testWithdrawalApproval() {
+  await testAdminAction('withdrawal', 'approve');
+}
+
+async function testWithdrawalRejection() {
+  await testAdminAction('withdrawal', 'reject');
+}
+
+async function testAdminAction(actionType, status) {
+  const token = document.getElementById('token').value;
+  const apiUrl = document.getElementById('apiUrl').value;
+  const userType = document.getElementById('userType').value;
+  const userId = document.getElementById('userId').value;
+  
+  if (!token) {
+    alert('Please enter JWT token');
+    return;
+  }
+  
+  if (!userId) {
+    alert('Please enter User ID');
+    return;
+  }
+  
+  let endpoint, requestData;
+  
+  switch(actionType) {
+    case 'registration':
+      endpoint = '/admin/users/review-registration';
+      requestData = {
+        userType: userType,
+        userId: userId,
+        reviewStatus: status === 'approve' ? 'accepted' : 'rejected'
+      };
+      break;
+      
+    case 'kyc':
+      // You'll need to get actual KYC ID from your system
+      const kycId = prompt('Enter KYC ID:');
+      if (!kycId) return;
+      
+      endpoint = '/admin/users/review-kyc';
+      requestData = {
+        kycId: kycId,
+        status: status === 'approve' ? 'approved' : 'rejected',
+        kycType: userType
+      };
+      break;
+      
+    case 'withdrawal':
+      // You'll need to get actual withdrawal ID from your system
+      const withdrawalId = prompt('Enter Withdrawal ID:');
+      if (!withdrawalId) return;
+      
+      endpoint = `/admin/payouts/${withdrawalId}/${status}`;
+      requestData = {};
+      break;
+  }
+  
+  try {
+    log(`Sending ${status} request for ${actionType}...`);
+    
+    const response = await fetch(apiUrl + endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(requestData)
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      log(`${actionType} ${status} request sent successfully`);
+      alert(`${actionType.charAt(0).toUpperCase() + actionType.slice(1)} ${status} request sent successfully!`);
+    } else {
+      log(`Failed to send ${actionType} ${status} request: ${result.error || result.message}`);
+      alert(`Failed: ${result.error || result.message}`);
+    }
+  } catch (error) {
+    log(`Error sending ${actionType} ${status} request: ${error.message}`);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+// UI Functions
+function renderNotifications() {
+  const container = document.getElementById('notifications');
+  container.innerHTML = '';
+  
+  if (notifications.length === 0) {
+    container.innerHTML = '<p>No notifications received yet.</p>';
+    return;
+  }
+  
+  notifications.forEach(notification => {
+    const div = document.createElement('div');
+    div.className = `notification ${notification.isRead ? '' : 'unread'}`;
+    div.innerHTML = `
+      <strong>${notification.title || 'Notification'}</strong><br>
+      ${notification.message || 'No message'}<br>
+      <small>${notification.timestamp.toLocaleString()}</small>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function clearNotifications() {
+  notifications = [];
+  document.getElementById('notifications').innerHTML = '<p>No notifications received yet.</p>';
+  log('Notifications cleared');
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+  log('Page loaded. Ready to connect.');
+  updateStatus(false);
+});
+</script>
+</body>
+</html>

@@ -752,8 +752,25 @@ exports.listPendingRegistrations = async (req, res) => {
         let data = {};
         
         if (!userType || userType === 'female') {
-            data.females = await FemaleUser.find({ reviewStatus: 'pending' }).select('_id name email mobileNumber images videoUrl bio age gender createdAt updatedAt reviewStatus kycStatus rejectionReason');
+            const females = await FemaleUser.find({ reviewStatus: 'pending' })
+                .select('_id name email mobileNumber images videoUrl bio age gender createdAt updatedAt reviewStatus kycStatus rejectionReason')
+                .populate({ path: 'images', select: 'imageUrl' });
+            
+            // Transform to include only the first image URL directly (not as array)
+            data.females = females.map(female => {
+                const femaleObj = female.toObject();
+                // Extract only the first image URL
+                if (femaleObj.images && femaleObj.images.length > 0) {
+                    femaleObj.image = femaleObj.images[0].imageUrl; // Single image URL
+                } else {
+                    femaleObj.image = null; // No image available
+                }
+                // Remove the images array since we're returning single image
+                delete femaleObj.images;
+                return femaleObj;
+            });
         }
+        
         if (!userType || userType === 'agency') {
             data.agencies = await AgencyUser.find({ reviewStatus: 'pending' }).select('_id firstName lastName email mobileNumber image createdAt updatedAt reviewStatus rejectionReason');
         }

@@ -619,7 +619,8 @@ exports.verifyLoginOtp = async (req, res) => {
       } else if (user.reviewStatus === 'accepted') {
         redirectTo = 'DASHBOARD';
       } else if (user.reviewStatus === 'rejected') {
-        redirectTo = 'REJECTED';
+        // When rejected, user should complete profile again with proper details
+        redirectTo = 'COMPLETE_PROFILE';
       }
 
       res.json({
@@ -633,7 +634,8 @@ exports.verifyLoginOtp = async (req, res) => {
             email: user.email,
             mobileNumber: user.mobileNumber,
             profileCompleted: user.profileCompleted,
-            reviewStatus: user.reviewStatus
+            reviewStatus: user.reviewStatus,
+            ...(user.reviewStatus === 'rejected' && user.rejectionReason && { rejectionReason: user.rejectionReason })
           },
           redirectTo: redirectTo
         }
