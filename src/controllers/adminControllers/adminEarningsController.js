@@ -30,35 +30,11 @@ exports.getEarningsSummary = async (req, res) => {
       }
     ]);
 
-    // Get recent earnings
-    const recentEarnings = await AdminEarning.find()
-      .populate('fromUserId', 'firstName lastName email')
-      .populate('packageId', 'name amount coin')
-      .sort({ createdAt: -1 })
-      .limit(10);
-
     res.json({
       success: true,
       data: {
         totalEarnings: totalEarnings[0]?.total || 0,
-        earningsBySource,
-        recentEarnings: recentEarnings.map(earning => ({
-          id: earning._id,
-          source: earning.source,
-          amount: earning.amount,
-          fromUser: earning.fromUserId ? {
-            id: earning.fromUserId._id,
-            name: `${earning.fromUserId.firstName} ${earning.fromUserId.lastName}`,
-            email: earning.fromUserId.email
-          } : null,
-          package: earning.packageId ? {
-            name: earning.packageId.name,
-            amount: earning.packageId.amount,
-            coins: earning.packageId.coin
-          } : null,
-          metadata: earning.metadata,
-          date: earning.createdAt
-        }))
+        earningsBySource
       }
     });
   } catch (err) {

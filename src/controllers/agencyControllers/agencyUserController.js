@@ -451,6 +451,10 @@ exports.agencyMe = async (req, res) => {
       .populate({
         path: 'referredByAgency',
         select: 'firstName lastName email'
+      })
+      .populate({
+        path: 'referredFemaleUsers',
+        select: 'name email firstName lastName'
       });
     if (!agency) return res.status(404).json({ success: false, message: messages.COMMON.USER_NOT_FOUND });
     

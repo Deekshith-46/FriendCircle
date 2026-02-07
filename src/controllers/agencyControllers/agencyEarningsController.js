@@ -65,7 +65,7 @@ exports.getAgencyEarnings = async (req, res) => {
       status: 'active',
       reviewStatus: 'accepted'
     })
-.select('_id name images score dailyScore weeklyScore walletBalance onlineStatus')
+.select('_id name images score dailyScore weeklyScore walletBalance onlineStatus totalOnlineMinutes')
     .populate('images', 'imageUrl');
     
     if (females.length === 0) {
@@ -115,7 +115,7 @@ exports.getAgencyEarnings = async (req, res) => {
         dailyScore: female.dailyScore || 0,  // Enhanced: daily score
         weeklyScore: female.weeklyScore || 0, // Enhanced: weekly score
         earnings: periodStat ? Math.round(periodStat.totalCoins * 100) / 100 : 0, // Enhanced: earnings for the period
-        time: periodStat ? Number((periodStat.totalSeconds / 3600).toFixed(1)) : 0, // Enhanced: time in hours
+        time: female.totalOnlineMinutes || 0, // Enhanced: total online minutes from user profile
         walletBalance: female.walletBalance || 0,    // Additional: current wallet balance
         onlineStatus: female.onlineStatus || false
       };
