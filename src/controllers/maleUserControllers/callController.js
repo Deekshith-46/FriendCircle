@@ -444,6 +444,38 @@ exports.endCall = async (req, res) => {
       status: 'completed'
     });
     
+    // ✅ CREATE ADMIN EARNING RECORD FOR CALL COMMISSION
+    // This was missing - admin commission was calculated but never persisted
+    if (adminEarned > 0) {
+      const AdminEarning = require('../../models/admin/AdminEarning');
+      
+      // 🔒 Idempotency guard to prevent duplicate earnings
+      const existingAdminEarning = await AdminEarning.findOne({
+        source: 'CALL_COMMISSION',
+        transactionId: callRecord._id
+      });
+      
+      if (!existingAdminEarning) {
+        await AdminEarning.create({
+          source: 'CALL_COMMISSION',
+          fromUserType: 'male',
+          fromUserModel: 'MaleUser',
+          fromUserId: callerId,
+          amount: adminEarned,
+          transactionId: callRecord._id,
+          metadata: {
+            callType: callType || 'video',
+            durationSeconds: billableSeconds,
+            totalCoins: malePay,
+            platformMargin: platformMargin,
+            adminSharePercentage: adminSharePercentage,
+            isAgencyFemale: isAgencyFemale,
+            femaleEarning: femaleEarning
+          }
+        });
+      }
+    }
+    
     // ✅ APPLY REAL-TIME CALL TARGET REWARD
     // This triggers immediately when call completes
     await applyCallTargetReward(receiverId, callType || 'video', callRecord._id);

@@ -71,11 +71,18 @@ exports.getEarningsHistory = async (req, res) => {
 
     const total = await AdminEarning.countDocuments(query);
 
-    res.json({
-      success: true,
-      data: earnings.map(earning => ({
+    // Group earnings by source
+    const earningsBySource = {
+      CALL_COMMISSION: [],
+      PACKAGE_PURCHASE: [],
+      GIFT_EARNING: [],
+      WITHDRAWAL_FEE: []
+    };
+    
+    // Categorize earnings by source
+    earnings.forEach(earning => {
+      const earningData = {
         id: earning._id,
-        source: earning.source,
         amount: earning.amount,
         fromUser: earning.fromUserId ? {
           id: earning.fromUserId._id,
@@ -96,7 +103,30 @@ exports.getEarningsHistory = async (req, res) => {
         } : null,
         metadata: earning.metadata,
         date: earning.createdAt
-      })),
+      };
+      
+      // Add to appropriate source array
+      if (earningsBySource[earning.source]) {
+        earningsBySource[earning.source].push(earningData);
+      } else {
+        // For any new source types, create array dynamically
+        if (!earningsBySource[earning.source]) {
+          earningsBySource[earning.source] = [];
+        }
+        earningsBySource[earning.source].push(earningData);
+      }
+    });
+    
+    // Remove empty source arrays
+    Object.keys(earningsBySource).forEach(source => {
+      if (earningsBySource[source].length === 0) {
+        delete earningsBySource[source];
+      }
+    });
+
+    res.json({
+      success: true,
+      data: earningsBySource,
       pagination: {
         currentPage: parseInt(page),
         totalPages: Math.ceil(total / limit),

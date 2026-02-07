@@ -32,13 +32,30 @@ exports.createWalletOrder = async (req, res) => {
 
     const order = await razorpay.orders.create(options);
 
+    // ✅ Create pending transaction during order creation
+    const user = await MaleUser.findById(req.user.id);
+    const pendingTransaction = await Transaction.create({
+      userType: 'male',
+      userId: req.user.id,
+      operationType: 'wallet',
+      action: 'credit',
+      amount: amount,
+      message: `Wallet recharge via Razorpay - Order: ${order.id}`,
+      balanceAfter: user.walletBalance || 0, // Will be updated during verification
+      createdBy: req.user.id,
+      paymentGateway: 'razorpay',
+      orderId: order.id,
+      status: 'PENDING'
+    });
+
     // Save payment record
     const payment = new Payment({
       user: req.user.id,
       razorpayOrderId: order.id,
       amount: amountInPaise,
       type: 'wallet',
-      walletAmount: amount
+      walletAmount: amount,
+      transactionId: pendingTransaction._id // Link to pending transaction
     });
     await payment.save();
 
@@ -77,6 +94,22 @@ exports.createCoinOrder = async (req, res) => {
 
     const order = await razorpay.orders.create(options);
 
+    // ✅ Create pending transaction during order creation
+    const user = await MaleUser.findById(req.user.id);
+    const pendingTransaction = await Transaction.create({
+      userType: 'male',
+      userId: req.user.id,
+      operationType: 'coin',
+      action: 'credit',
+      amount: pkg.coin,
+      message: `Coin recharge via Razorpay - Order: ${order.id}`,
+      balanceAfter: user.coinBalance || 0, // Will be updated during verification
+      createdBy: req.user.id,
+      paymentGateway: 'razorpay',
+      orderId: order.id,
+      status: 'PENDING'
+    });
+
     // Save payment record
     const payment = new Payment({
       user: req.user.id,
@@ -84,7 +117,8 @@ exports.createCoinOrder = async (req, res) => {
       amount: amountInPaise,
       type: 'coin',
       coinsReceived: pkg.coin,
-      packageId: pkg._id
+      packageId: pkg._id,
+      transactionId: pendingTransaction._id // Link to pending transaction
     });
     await payment.save();
 
@@ -130,46 +164,45 @@ exports.verifyPayment = async (req, res) => {
     payment.status = 'completed';
     await payment.save();
 
-    // Update user balance and create transaction
+    // 🔍 FIRST: Find existing pending transaction by orderId
+    const existingTransaction = await Transaction.findOne({
+      orderId: razorpay_order_id,
+      userId: req.user.id,
+      status: 'PENDING'
+    });
+
+    if (!existingTransaction) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Pending transaction not found for this order' 
+      });
+    }
+
+    // Update user balance and transaction
     const user = await MaleUser.findById(req.user.id);
-    let transaction;
+    let transaction = existingTransaction; // Use existing transaction
 
     if (payment.type === 'wallet') {
       user.walletBalance = (user.walletBalance || 0) + payment.walletAmount;
       await user.save();
 
-      transaction = await Transaction.create({
-        userType: 'male',
-        userId: user._id,
-        operationType: 'wallet',
-        action: 'credit',
-        amount: payment.walletAmount,
-        message: `Wallet recharge via Razorpay - Order: ${payment.razorpayOrderId}`,
-        balanceAfter: user.walletBalance,
-        createdBy: user._id,
-        paymentGateway: 'razorpay',
-        paymentId: razorpay_payment_id,
-        orderId: razorpay_order_id,
-        status: 'SUCCESS'
-      });
+      // ✅ UPDATE existing transaction instead of creating new one
+      transaction.status = 'SUCCESS';
+      transaction.paymentId = razorpay_payment_id;
+      transaction.balanceAfter = user.walletBalance;
+      transaction.updatedAt = new Date();
+      await transaction.save();
+
     } else if (payment.type === 'coin') {
       user.coinBalance = (user.coinBalance || 0) + payment.coinsReceived;
       await user.save();
 
-      transaction = await Transaction.create({
-        userType: 'male',
-        userId: user._id,
-        operationType: 'coin',
-        action: 'credit',
-        amount: payment.coinsReceived,
-        message: `Coin recharge via Razorpay - Order: ${payment.razorpayOrderId}`,
-        balanceAfter: user.coinBalance,
-        createdBy: user._id,
-        paymentGateway: 'razorpay',
-        paymentId: razorpay_payment_id,
-        orderId: razorpay_order_id,
-        status: 'SUCCESS'
-      });
+      // ✅ UPDATE existing transaction instead of creating new one
+      transaction.status = 'SUCCESS';
+      transaction.paymentId = razorpay_payment_id;
+      transaction.balanceAfter = user.coinBalance;
+      transaction.updatedAt = new Date();
+      await transaction.save();
     }
 
     // Link transaction to payment
