@@ -72,6 +72,7 @@ const femaleUserSchema = new mongoose.Schema({
   onlineStatus: { type: Boolean, default: false },
   onlineStartTime: { type: Date },
   totalOnlineMinutes: { type: Number, default: 0 },
+  lastOnlineResetDate: { type: Date, default: null },
   missedCalls: { type: Number, default: 0 },
   walletBalance: { type: Number, default: 0 },
   coinBalance: { type: Number, default: 0 },

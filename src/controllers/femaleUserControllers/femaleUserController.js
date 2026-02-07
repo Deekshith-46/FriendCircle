@@ -1819,6 +1819,10 @@ exports.toggleOnlineStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: messages.COMMON.USER_NOT_FOUND });
     }
 
+    // 🔁 RESET DAILY COUNTER IF NEEDED
+    const resetDailyOnlineMinutes = require('../../utils/resetDailyOnlineMinutes');
+    await resetDailyOnlineMinutes(user);
+
     // If going online
     if (onlineStatus) {
       // Location is required to go online
@@ -1856,7 +1860,7 @@ exports.toggleOnlineStatus = async (req, res) => {
       message: messages.USER.STATUS_UPDATED(onlineStatus),
       data: {
         onlineStatus: user.onlineStatus,
-        totalOnlineMinutes: user.totalOnlineMinutes || 0
+        totalOnlineMinutes: Number(user.totalOnlineMinutes.toFixed(2))
       }
     });
   } catch (err) {
