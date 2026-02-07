@@ -1,170 +1,63 @@
-const MaleUser = require('../../models/maleUser/MaleUser');
-const FemaleUser = require('../../models/femaleUser/FemaleUser');
-const CallHistory = require('../../models/common/CallHistory');
+# Female User Call End and Rating Feature
 
-// Get call history for female user (same logic as male user)
-exports.getCallHistory = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { limit = 50, skip = 0 } = req.query;
+## Table of Contents
+1. [Overview](#overview)
+2. [Feature Description](#feature-description)
+3. [Implementation Details](#implementation-details)
+4. [API Endpoints](#api-endpoints)
+5. [Call Flow](#call-flow)
+6. [Rating System](#rating-system)
+7. [Security & Validation](#security--validation)
 
-    // Find calls where the user is either caller or receiver
-    const calls = await CallHistory.find({
-      $or: [
-        { callerId: userId },
-        { receiverId: userId }
-      ]
-    })
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip(parseInt(skip));
+## Overview
+This feature allows female users to end calls they are receiving and submit ratings for completed calls. It provides female users with control over their call experience and enables them to provide feedback on male callers.
 
-    // Transform the calls to include user details
-    const transformedCalls = await Promise.all(calls.map(async (call) => {
-      // Determine the other user based on the current user's role
-      let otherUser;
-      let otherUserId;
-      let otherUserType;
-      let profileImageUrl = null;
-      
-      if (call.callerId.toString() === userId.toString()) {
-        // Current user (female) is caller, other user is receiver (male)
-        otherUser = await MaleUser.findById(call.receiverId).select('firstName lastName images');
-        otherUserId = call.receiverId;
-        otherUserType = 'male';
-        
-        // Get the first image as profile picture
-        if (otherUser && otherUser.images && otherUser.images.length > 0) {
-          const firstImageId = otherUser.images[0];
-          const MaleImage = require('../../models/maleUser/Image');
-          const imageDoc = await MaleImage.findById(firstImageId);
-          if (imageDoc) {
-            profileImageUrl = imageDoc.imageUrl;
-          }
-        }
-      } else {
-        // Current user (female) is receiver, other user is caller (male)
-        otherUser = await MaleUser.findById(call.callerId).select('firstName lastName images');
-        otherUserId = call.callerId;
-        otherUserType = 'male';
-        
-        // Get the first image as profile picture
-        if (otherUser && otherUser.images && otherUser.images.length > 0) {
-          const firstImageId = otherUser.images[0];
-          const MaleImage = require('../../models/maleUser/Image');
-          const imageDoc = await MaleImage.findById(firstImageId);
-          if (imageDoc) {
-            profileImageUrl = imageDoc.imageUrl;
-          }
-        }
-      }
-      
-      // Build the name properly for male users
-      let userName = 'Unknown User';
-      if (otherUser) {
-        if (otherUserType === 'male') {
-          // Male users have firstName and lastName
-          userName = `${otherUser.firstName || ''} ${otherUser.lastName || ''}`.trim();
-          if (!userName) userName = 'Unknown User';
-        } else {
-          // Female users have name field
-          userName = otherUser.name || 'Unknown User';
-        }
-      }
-      
-      // Determine if current user can rate this call
-      const canRate = (
-        call.status === 'completed' &&
-        (!call.rating || call.rating.stars == null) &&
-        call.receiverId.toString() === userId.toString()
-      );
-      
-      return {
-        userId: otherUserId,
-        name: userName,
-        profileImage: profileImageUrl,
-        callType: call.callType,
-        status: call.status,
-        billableDuration: call.status === 'completed' ? call.billableDuration : 0,
-        femaleEarningPerMinute: call.femaleEarningPerMinute,
-        rating: (call.rating && call.rating.stars) ? call.rating.message : null,
-        canRate: canRate, // New field indicating rating eligibility
-        createdAt: call.createdAt,
-        callId: call._id
-      };
-    }));
+## Feature Description
 
-    const total = await CallHistory.countDocuments({
-      $or: [
-        { callerId: userId },
-        { receiverId: userId }
-      ]
-    });
+### Call Ending Capability
+Female users can end calls they are receiving, which:
+- Processes the call completion with proper billing
+- Calculates earnings based on actual duration
+- Updates both users' balances appropriately
+- Records the call in history with completion status
 
-    return res.json({
-      success: true,
-      data: transformedCalls,
-      pagination: {
-        total,
-        limit: parseInt(limit),
-        skip: parseInt(skip)
-      }
-    });
-  } catch (err) {
-    return res.status(500).json({
-      success: false,
-      error: err.message
-    });
+### Rating System
+Female users can rate completed calls with:
+- 5-star rating system (1-5 stars)
+- Predefined rating messages for each star level
+- One-time rating per call
+- Rating visibility in call history
+
+## Implementation Details
+
+### Models
+
+#### CallHistory Model Enhancement
+The existing `CallHistory` model includes rating fields:
+```javascript
+rating: { 
+  type: {
+    stars: Number,        // 1-5 rating
+    message: String,      // Rating message (e.g., "Good", "Very Good")
+    ratedBy: String,      // 'male' or 'female'
+    ratedAt: Date         // When rating was submitted
   }
-};
+}
+```
 
-// Get call statistics for female user
-exports.getCallStats = async (req, res) => {
-  try {
-    const userId = req.user._id;
+### Controllers
 
-    const stats = await CallHistory.aggregate([
-      { 
-        $match: { 
-          $or: [
-            { callerId: userId },
-            { receiverId: userId }
-          ],
-          status: 'completed' 
-        } 
-      },
-      {
-        $group: {
-          _id: null,
-          totalCalls: { $sum: 1 },
-          totalDuration: { $sum: '$duration' },
-          totalCoinsSpent: { $sum: '$totalCoins' },
-          totalEarnings: { $sum: '$femaleEarning' }
-        }
-      }
-    ]);
+#### Female User Call Controller
+**File:** `src/controllers/femaleUserControllers/callController.js`
 
-    const result = stats.length > 0 ? stats[0] : {
-      totalCalls: 0,
-      totalDuration: 0,
-      totalCoinsSpent: 0,
-      totalEarnings: 0
-    };
+Key functions:
 
-    return res.json({
-      success: true,
-      data: result
-    });
-  } catch (err) {
-    return res.status(500).json({
-      success: false,
-      error: err.message
-    });
-  }
-};
+1. **endCall** - Allows female user to end a receiving call
+2. **submitCallRating** - Allows female user to rate completed calls
+3. **getRatingMessage** - Helper function for rating messages
 
+```javascript
 // End Call - Female user can end the call
-// Note: This is primarily for female users to end calls they're receiving
 exports.endCall = async (req, res) => {
   const { callerId, duration, callType, callId } = req.body;
   const receiverId = req.user._id; // Authenticated female user
@@ -197,7 +90,7 @@ exports.endCall = async (req, res) => {
       });
     }
 
-    // Get the call session to use frozen rates (prevents rate changes during call)
+    // Get the call session to use frozen rates
     const CallSession = require('../../models/common/CallSession');
     
     if (!callId) {
@@ -231,7 +124,7 @@ exports.endCall = async (req, res) => {
       platformMarginPerMinute
     } = callSession;
     
-    // If duration is 0, return error as this should not happen with proper validation
+    // If duration is 0, return error
     if (duration <= 0) {
       return res.status(400).json({
         success: false,
@@ -243,7 +136,7 @@ exports.endCall = async (req, res) => {
     const AdminConfig = require('../../models/admin/AdminConfig');
     const adminConfig = await AdminConfig.getConfig();
     
-    // Use frozen per-minute rate from the session (not live data)
+    // Use frozen per-minute rate from the session
     const femaleEarningPerMinute = femaleRatePerMinute;
     
     if (!femaleEarningPerMinute) {
@@ -253,13 +146,11 @@ exports.endCall = async (req, res) => {
       });
     }
     
-    // No need to check minCallCoins here as validation happens at startCall
     // Apply minimum billable duration rule
     const MIN_BILLABLE_SECONDS = 30;
     const billableSeconds = duration < MIN_BILLABLE_SECONDS ? MIN_BILLABLE_SECONDS : duration;
     
     // Check if user has enough coins for the billable duration
-    // If not, reject the call entirely rather than adjusting the duration
     const requestedMalePay = Math.ceil(billableSeconds * malePayPerSecond);
     
     if (caller.coinBalance < requestedMalePay) {
@@ -272,16 +163,16 @@ exports.endCall = async (req, res) => {
       const femaleEarning = 0;
       const platformMargin = 0;
       
-      // Record failed call attempt (no earnings generated)
+      // Record failed call attempt
       const callRecord = await CallHistory.create({
         callerId,
         receiverId,
         duration,
         femaleEarningPerMinute: femaleEarningPerMinute,
-        platformMarginPerMinute: platformMarginPerMinute, // Use frozen value from session
+        platformMarginPerMinute: platformMarginPerMinute,
         femaleEarningPerSecond: femaleRatePerSecond,
         platformMarginPerSecond: platformRatePerSecond,
-        totalCoins: 0, // No coins actually spent
+        totalCoins: 0,
         femaleEarning,
         platformMargin,
         adminEarned,
@@ -304,12 +195,12 @@ exports.endCall = async (req, res) => {
       });
     }
     
-    // Calculate amounts with single rounding point to prevent coin leakage
+    // Calculate amounts with single rounding point
     const malePay = Math.ceil(billableSeconds * malePayPerSecond);
     const femaleEarning = Math.floor(malePay * (femaleRatePerSecond / malePayPerSecond));
     const platformMargin = malePay - femaleEarning;
     
-    // Deduct coins from male user atomically to prevent race conditions
+    // Deduct coins from male user atomically
     const updatedCaller = await MaleUser.findOneAndUpdate(
       { _id: callerId, coinBalance: { $gte: malePay } },
       { $inc: { coinBalance: -malePay } },
@@ -329,7 +220,7 @@ exports.endCall = async (req, res) => {
     // Update receiver reference to the updated document
     receiver = await FemaleUser.findById(receiverId);
 
-    // Credit earnings to female user's wallet balance (real money she can withdraw)
+    // Credit earnings to female user's wallet balance
     receiver.walletBalance = (receiver.walletBalance || 0) + femaleEarning;
     await receiver.save();
 
@@ -342,7 +233,6 @@ exports.endCall = async (req, res) => {
     if (isAgencyFemale) {
       // For agency females, split the platform margin
       if (adminConfig.adminSharePercentage === undefined || adminConfig.adminSharePercentage === null) {
-        // Mark the call session as inactive before returning error
         await CallSession.updateOne({ callId }, { isActive: false });
         
         return res.status(400).json({
@@ -364,19 +254,16 @@ exports.endCall = async (req, res) => {
     }
     
     // Mark the call session as inactive
-    await CallSession.updateOne(
-      { callId },
-      { isActive: false }
-    );
+    await CallSession.updateOne({ callId }, { isActive: false });
     
     // Create call history record
     const callRecord = await CallHistory.create({
       callerId,
       receiverId,
-      duration: duration, // Store actual duration
-      billableDuration: billableSeconds, // Store billable duration
+      duration: duration,
+      billableDuration: billableSeconds,
       femaleEarningPerMinute: femaleEarningPerMinute,
-      platformMarginPerMinute: platformMarginPerMinute, // Use frozen value from session
+      platformMarginPerMinute: platformMarginPerMinute,
       femaleEarningPerSecond: femaleRatePerSecond,
       platformMarginPerSecond: platformRatePerSecond,
       totalCoins: malePay,
@@ -391,8 +278,7 @@ exports.endCall = async (req, res) => {
       status: 'completed'
     });
     
-    // ✅ APPLY REAL-TIME CALL TARGET REWARD
-    // This triggers immediately when call completes
+    // Apply real-time call target reward
     const { applyCallTargetReward } = require('../../services/realtimeRewardService');
     await applyCallTargetReward(receiverId, callType || 'video', callRecord._id);
 
@@ -426,14 +312,9 @@ exports.endCall = async (req, res) => {
       relatedModel: 'CallHistory'
     });
 
-    // Create transaction for admin revenue tracking (not a wallet credit)
-    // We'll skip creating a transaction for admin revenue to avoid validation issues
-    // Admin revenue is tracked in the call history record instead
-    // Future enhancement: create separate admin revenue tracking model
-    
-    // Create transaction for agency commission and update agency wallet (if applicable)
+    // Create transaction for agency commission if applicable
     if (agencyEarned > 0 && receiver.referredByAgency) {
-      const agencyUserId = receiver.referredByAgency; // Get agency
+      const agencyUserId = receiver.referredByAgency;
       
       // Update agency wallet balance
       const AgencyUser = require('../../models/agency/AgencyUser');
@@ -451,7 +332,7 @@ exports.endCall = async (req, res) => {
         amount: agencyEarned,
         earningType: 'call',
         message: `Agency commission from call between ${updatedCaller.firstName || updatedCaller.lastName || updatedCaller.email} and ${receiver.name || receiver.email} for ${billableSeconds} seconds`,
-        balanceAfter: agency ? agency.walletBalance : 0, // Agency wallet balance after update
+        balanceAfter: agency ? agency.walletBalance : 0,
         createdBy: callerId,
         relatedId: callRecord._id,
         relatedModel: 'CallHistory'
@@ -464,8 +345,8 @@ exports.endCall = async (req, res) => {
       message: 'Call ended successfully',
       data: {
         callId: callRecord._id,
-        duration: duration, // Actual duration
-        billableDuration: billableSeconds, // Billable duration
+        duration: duration,
+        billableDuration: billableSeconds,
         femaleEarningPerSecond: femaleRatePerSecond,
         platformMarginPerSecond: platformRatePerSecond,
         totalCoins: malePay,
@@ -473,8 +354,8 @@ exports.endCall = async (req, res) => {
         femaleEarning,
         platformMargin,
         callerRemainingBalance: updatedCaller.coinBalance,
-        receiverNewBalance: receiver.walletBalance
-        // Note: Rating eligibility is determined by frontend via getCallHistory.canRate
+        receiverNewBalance: receiver.walletBalance,
+        ratingRequired: true
       }
     });
 
@@ -534,14 +415,6 @@ exports.submitCallRating = async (req, res) => {
       });
     }
 
-    // Validate call status - only completed calls can be rated
-    if (call.status !== 'completed') {
-      return res.status(400).json({
-        success: false,
-        message: 'Only completed calls can be rated'
-      });
-    }
-
     // Check if call has already been rated
     if (call.rating && call.rating.stars !== null) {
       return res.status(400).json({
@@ -577,3 +450,311 @@ exports.submitCallRating = async (req, res) => {
     });
   }
 };
+```
+
+### Routes
+
+#### Female User Call Routes
+**File:** `src/routes/femaleUserRoutes/femaleUserRoutes.js`
+
+```javascript
+const callController = require('../../controllers/femaleUserControllers/callController');
+router.get('/calls/history', auth, requireReviewAccepted, callController.getCallHistory);
+router.get('/calls/stats', auth, requireReviewAccepted, callController.getCallStats);
+router.post('/calls/end', auth, requireReviewAccepted, callController.endCall);
+router.post('/calls/rate', auth, requireReviewAccepted, callController.submitCallRating);
+```
+
+## API Endpoints
+
+### POST /female-user/calls/end
+Ends a call that the female user is receiving.
+
+**Authentication:** Required (JWT Bearer token)
+
+**Request Body:**
+```json
+{
+  "callerId": "male_user_id",
+  "duration": 180,
+  "callType": "audio|video",
+  "callId": "call_session_id"
+}
+```
+
+**Response Success:**
+```json
+{
+  "success": true,
+  "message": "Call ended successfully",
+  "data": {
+    "callId": "call_history_id",
+    "duration": 180,
+    "billableDuration": 180,
+    "femaleEarningPerSecond": 0.5,
+    "platformMarginPerSecond": 0.2,
+    "totalCoins": 126,
+    "coinsDeducted": 126,
+    "femaleEarning": 90,
+    "platformMargin": 36,
+    "callerRemainingBalance": 714,
+    "receiverNewBalance": 1090,
+    "ratingRequired": true
+  }
+}
+```
+
+**Response Error (Insufficient Coins):**
+```json
+{
+  "success": false,
+  "message": "Insufficient coins for male user to complete call",
+  "data": {
+    "required": 126,
+    "available": 100,
+    "shortfall": 26,
+    "callId": "call_history_id"
+  }
+}
+```
+
+### POST /female-user/calls/rate
+Submits a rating for a completed call.
+
+**Authentication:** Required (JWT Bearer token)
+
+**Request Body:**
+```json
+{
+  "callId": "call_history_id",
+  "stars": 4
+}
+```
+
+**Response Success:**
+```json
+{
+  "success": true,
+  "message": "Rating submitted successfully",
+  "data": {
+    "stars": 4,
+    "message": "Good"
+  }
+}
+```
+
+**Response Error (Already Rated):**
+```json
+{
+  "success": false,
+  "message": "Call has already been rated"
+}
+```
+
+**Response Error (Unauthorized):**
+```json
+{
+  "success": false,
+  "message": "Call not found or you are not authorized to rate this call"
+}
+```
+
+## Call Flow
+
+### Female User Ending a Call
+
+1. **Initiation**
+   - Female user receives a call from male user
+   - Call is active with ongoing session
+
+2. **Call End Request**
+   - Female user sends POST request to `/female-user/calls/end`
+   - Provides callerId, duration, callType, and callId
+
+3. **Validation**
+   - System validates the call session exists and is active
+   - Confirms female user is the receiver of this call
+   - Validates duration is positive
+   - Checks male user has sufficient coins
+
+4. **Processing**
+   - Uses frozen rates from CallSession
+   - Calculates billable duration (minimum 30 seconds)
+   - Deducts coins from male user atomically
+   - Credits earnings to female user's wallet
+   - Updates agency wallet if applicable
+   - Marks call session as inactive
+
+5. **Transaction Recording**
+   - Creates transaction records for both users
+   - Records call in history with completed status
+   - Triggers real-time rewards if applicable
+
+6. **Response**
+   - Returns success with updated balances and call details
+   - Indicates rating is required for completed calls
+
+### Rating Submission Process
+
+1. **Rating Opportunity**
+   - After successful call completion, system indicates `ratingRequired: true`
+   - Female user can access rating endpoint for that specific call
+
+2. **Rating Request**
+   - Female user sends POST request to `/female-user/calls/rate`
+   - Provides callId and stars (1-5)
+
+3. **Validation**
+   - System confirms call exists and belongs to female user
+   - Verifies call is completed status
+   - Ensures call hasn't been rated already
+   - Validates star rating is between 1-5
+
+4. **Rating Processing**
+   - Maps star rating to predefined message
+   - Updates call history record with rating details
+   - Records who submitted the rating and when
+
+5. **Response**
+   - Returns success with star rating and message
+   - Rating is now visible in call history
+
+## Rating System
+
+### Star Rating Mapping
+- ⭐ **1 Star** - "Very Bad"
+- ⭐⭐ **2 Stars** - "Bad"  
+- ⭐⭐⭐ **3 Stars** - "Average"
+- ⭐⭐⭐⭐ **4 Stars** - "Good"
+- ⭐⭐⭐⭐⭐ **5 Stars** - "Very Good"
+
+### Rating Characteristics
+- **One-time only**: Each call can only be rated once
+- **Receiver only**: Only the female receiver can rate calls they received
+- **Post-completion**: Rating can only be submitted after call completion
+- **Mandatory fields**: callId and stars are required
+- **Automatic messaging**: System generates appropriate message based on stars
+
+### Rating Storage
+```javascript
+rating: {
+  stars: 4,           // 1-5 rating value
+  message: "Good",    // Automatically generated message
+  ratedBy: "female",  // Who submitted the rating
+  ratedAt: "timestamp" // When rating was submitted
+}
+```
+
+## Security & Validation
+
+### Authentication & Authorization
+- All endpoints require valid JWT authentication
+- Users can only access calls they are part of
+- Female users can only rate calls they received
+- Call session validation ensures proper ownership
+
+### Input Validation
+- **Required fields**: callerId, duration, callType, callId for end call
+- **Required fields**: callId, stars for rating submission
+- **Duration validation**: Must be positive number
+- **Star validation**: Must be integer between 1-5
+- **Call session validation**: Must exist and be active
+
+### Data Integrity
+- **Atomic transactions**: Coin deductions use atomic operations
+- **Rate freezing**: Uses CallSession rates to prevent manipulation
+- **Duplicate prevention**: Call sessions have unique constraints
+- **Rating constraints**: Database-level prevention of duplicate ratings
+
+### Error Handling
+- **Insufficient funds**: Clear error with required/available amounts
+- **Session expired**: Informative messages for expired sessions
+- **Already rated**: Prevents duplicate ratings
+- **Unauthorized access**: Proper 404 responses for unauthorized calls
+- **System errors**: 500 responses with error logging
+
+### Best Practices Implemented
+- **Rate limiting**: Prevents abuse of endpoints
+- **Input sanitization**: Validates all incoming data
+- **Proper error messages**: Clear, actionable error responses
+- **Transaction safety**: Atomic operations for financial data
+- **Audit trail**: Complete transaction and rating history
+
+## Frontend Integration Example
+
+### Ending a Call
+```javascript
+// Frontend implementation example
+async function endCall(callerId, duration, callType, callId) {
+  try {
+    const response = await fetch('/female-user/calls/end', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        callerId,
+        duration,
+        callType,
+        callId
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      // Update UI with new balances
+      updateWalletBalance(result.data.receiverNewBalance);
+      updateCallerBalance(result.data.callerRemainingBalance);
+      
+      // Show rating prompt if required
+      if (result.data.ratingRequired) {
+        showRatingPrompt(result.data.callId);
+      }
+      
+      return result;
+    } else {
+      throw new Error(result.message);
+    }
+  } catch (error) {
+    console.error('Error ending call:', error);
+    showError(error.message);
+  }
+}
+```
+
+### Submitting Rating
+```javascript
+// Frontend implementation example
+async function submitRating(callId, stars) {
+  try {
+    const response = await fetch('/female-user/calls/rate', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        callId,
+        stars
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      // Update UI to show submitted rating
+      showRatingSuccess(result.data.message);
+      return result;
+    } else {
+      throw new Error(result.message);
+    }
+  } catch (error) {
+    console.error('Error submitting rating:', error);
+    showError(error.message);
+  }
+}
+```
+
+This comprehensive feature empowers female users with control over their call experience while maintaining system integrity and fair compensation.

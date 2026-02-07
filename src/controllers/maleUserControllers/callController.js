@@ -523,8 +523,8 @@ exports.endCall = async (req, res) => {
         femaleEarning,
         platformMargin,
         callerRemainingBalance: caller.coinBalance,
-        receiverNewBalance: receiver.walletBalance,
-        ratingRequired: true // Female user needs to rate the call
+        receiverNewBalance: receiver.walletBalance
+        // Note: Rating eligibility is determined by frontend via getCallHistory.canRate
       }
     });
 
@@ -607,6 +607,13 @@ exports.getCallHistory = async (req, res) => {
         }
       }
       
+      // Determine if current user can rate this call
+      const canRate = (
+        call.status === 'completed' &&
+        (!call.rating || call.rating.stars == null) &&
+        call.receiverId.toString() === userId.toString()
+      );
+      
       return {
         userId: otherUserId,
         name: userName,
@@ -615,7 +622,8 @@ exports.getCallHistory = async (req, res) => {
         status: call.status,
         billableDuration: call.status === 'completed' ? call.billableDuration : 0,
         femaleEarningPerMinute: call.femaleEarningPerMinute,
-        rating: (call.rating && call.rating.stars) ? call.rating.message : null, // Include rating message directly
+        rating: (call.rating && call.rating.stars) ? call.rating.message : null,
+        canRate: canRate, // New field indicating rating eligibility
         createdAt: call.createdAt,
         callId: call._id
       };
