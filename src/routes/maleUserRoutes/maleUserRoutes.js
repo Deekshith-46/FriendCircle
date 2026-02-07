@@ -46,6 +46,93 @@ router.get('/me/transactions', auth, async (req, res) => {
   }
 });
 
+// Get package purchase history
+router.get('/me/transactions/packages', auth, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const filter = { 
+      userType: 'male', 
+      userId: req.user._id,
+      operationType: 'coin',
+      $or: [
+        { message: { $regex: 'Coin Balance Added!!!!', $options: 'i' } },
+        { message: { $regex: 'Coin recharge via Razorpay', $options: 'i' } }
+      ]
+    };
+    
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const inclusiveEnd = new Date(endDate);
+        inclusiveEnd.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = inclusiveEnd;
+      }
+    }
+    
+    const txns = await Transaction.find(filter).sort({ createdAt: -1 });
+    res.json({ success: true, data: txns });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get call history
+router.get('/me/transactions/calls', auth, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const filter = { 
+      userType: 'male', 
+      userId: req.user._id,
+      operationType: 'coin',
+      message: { $regex: 'Video/Audio call with', $options: 'i' }
+    };
+    
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const inclusiveEnd = new Date(endDate);
+        inclusiveEnd.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = inclusiveEnd;
+      }
+    }
+    
+    const txns = await Transaction.find(filter).sort({ createdAt: -1 });
+    res.json({ success: true, data: txns });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get gift history
+router.get('/me/transactions/gifts', auth, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const filter = { 
+      userType: 'male', 
+      userId: req.user._id,
+      operationType: 'coin',
+      message: { $regex: 'Gift sent', $options: 'i' }
+    };
+    
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const inclusiveEnd = new Date(endDate);
+        inclusiveEnd.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = inclusiveEnd;
+      }
+    }
+    
+    const txns = await Transaction.find(filter).sort({ createdAt: -1 });
+    res.json({ success: true, data: txns });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Verify Login OTP
 router.post('/verify-login-otp', maleUserController.verifyLoginOtp);
 
